@@ -1,5 +1,20 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Environment Variables
+
+Create a `.env.local` file in the project root with:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+For email confirmation redirects, set your Supabase Auth redirect URL to:
+
+```bash
+http://localhost:3000/auth/callback
+```
+
 ## Getting Started
 
 First, run the development server:
