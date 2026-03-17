@@ -9,11 +9,22 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
+Optional fallback (if your Supabase project uses this naming):
+
+```bash
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=your_supabase_anon_key
+```
+
 For email confirmation redirects, set your Supabase Auth redirect URL to:
 
 ```bash
 http://localhost:3000/auth/callback
 ```
+
+## Database Schema
+
+Apply the schema in [supabase/schema.sql](supabase/schema.sql) in your Supabase SQL editor.
+It creates `patients` and `analyses` tables, enums, indexes, update triggers, and RLS policies scoped per authenticated user.
 
 ## Getting Started
 
