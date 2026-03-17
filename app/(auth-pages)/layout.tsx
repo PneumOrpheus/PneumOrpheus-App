@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <section className="grid min-h-[calc(100vh-9rem)] overflow-hidden rounded-2xl border border-brand/20 bg-white shadow-sm lg:grid-cols-2">
@@ -9,7 +7,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-fourth/90">
             PneumOrpheus
           </p>
-          <h2 className="max-w-sm text-3xl font-semibold leading-tight text-second">
+          <h2 className="max-w-sm text-3xl font-semibold leading-tight tracking-tight text-zinc-500">
             AI-assisted pulmonary diagnostics for clinical cancer workflows.
           </h2>
         </div>
