@@ -20,8 +20,8 @@ create table if not exists public.patients (
   id text primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
-  age integer not null check (age > 0 and age < 130),
-  sex public.patient_sex not null,
+  age integer check (age > 0 and age < 130),
+  sex public.patient_sex,
   email text not null,
   recent_analysis_ids text[] not null default '{}',
   created_at timestamptz not null default timezone('utc'::text, now()),
@@ -38,8 +38,19 @@ create table if not exists public.analyses (
   status public.analysis_status not null,
   findings text not null,
   classifications jsonb not null default '[]'::jsonb,
+  study_file_path text,
+  study_file_name text,
+  study_file_size_bytes bigint,
+  study_file_mime_type text,
   updated_at timestamptz not null default timezone('utc'::text, now())
 );
+
+alter table public.patients alter column age drop not null;
+alter table public.patients alter column sex drop not null;
+alter table public.analyses add column if not exists study_file_path text;
+alter table public.analyses add column if not exists study_file_name text;
+alter table public.analyses add column if not exists study_file_size_bytes bigint;
+alter table public.analyses add column if not exists study_file_mime_type text;
 
 create index if not exists idx_patients_user_id on public.patients(user_id);
 create index if not exists idx_analyses_user_id on public.analyses(user_id);
@@ -120,3 +131,42 @@ create policy "analyses_delete_own"
 on public.analyses
 for delete
 using (auth.uid() = user_id);
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'study-files',
+  'study-files',
+  false,
+  26214400,
+  array['application/dicom', 'application/gzip', 'application/x-gzip', 'application/octet-stream']
+)
+on conflict (id) do nothing;
+
+drop policy if exists "study_files_select_own" on storage.objects;
+create policy "study_files_select_own"
+on storage.objects
+for select
+to authenticated
+using (bucket_id = 'study-files' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "study_files_insert_own" on storage.objects;
+create policy "study_files_insert_own"
+on storage.objects
+for insert
+to authenticated
+with check (bucket_id = 'study-files' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "study_files_update_own" on storage.objects;
+create policy "study_files_update_own"
+on storage.objects
+for update
+to authenticated
+using (bucket_id = 'study-files' and (storage.foldername(name))[1] = auth.uid()::text)
+with check (bucket_id = 'study-files' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "study_files_delete_own" on storage.objects;
+create policy "study_files_delete_own"
+on storage.objects
+for delete
+to authenticated
+using (bucket_id = 'study-files' and (storage.foldername(name))[1] = auth.uid()::text);

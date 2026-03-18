@@ -26,6 +26,10 @@ http://localhost:3000/auth/callback
 Apply the schema in [supabase/schema.sql](supabase/schema.sql) in your Supabase SQL editor.
 It creates `patients` and `analyses` tables, enums, indexes, update triggers, and RLS policies scoped per authenticated user.
 
+For local/demo starter data, run [supabase/seed.sql](supabase/seed.sql) after schema setup.
+It inserts/upserts sample patients and analyses for the oldest user in `auth.users`.
+Seeded analysis classes are `Adenocarcinoma`, `Small Cell Carcinoma`, and `Squamous Cell Carcinoma`.
+
 ## Getting Started
 
 First, run the development server:
