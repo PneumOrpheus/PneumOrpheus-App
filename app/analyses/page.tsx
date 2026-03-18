@@ -1,7 +1,30 @@
 import Link from "next/link";
-import { analyses } from "@/lib/mock-data";
+import { createClient } from "@/utils/supabase/server";
 
-export default function AnalysesPage() {
+type AnalysisRow = {
+  id: string;
+  patient_name: string;
+  modality: string;
+  status: string;
+  created_at: string;
+  study_file_name: string | null;
+  study_file_size_bytes: number | null;
+};
+
+export default async function AnalysesPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data } = await supabase
+    .from("analyses")
+    .select("id, patient_name, modality, status, created_at, study_file_name, study_file_size_bytes")
+    .eq("user_id", user?.id ?? "")
+    .order("created_at", { ascending: false });
+
+  const analyses = (data ?? []) as AnalysisRow[];
+
   return (
     <section className="mx-auto max-w-5xl space-y-6">
       <div className="relative overflow-hidden rounded-2xl border border-brand/20 bg-gradient-to-br from-brand via-third to-fifth p-6 text-white shadow-sm sm:p-8">
@@ -27,6 +50,7 @@ export default function AnalysesPage() {
               <th className="px-4 py-3 font-medium">Report</th>
               <th className="px-4 py-3 font-medium">Patient</th>
               <th className="px-4 py-3 font-medium">Modality</th>
+              <th className="px-4 py-3 font-medium">File</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Date</th>
             </tr>
@@ -39,10 +63,18 @@ export default function AnalysesPage() {
                     {analysis.id}
                   </Link>
                 </td>
-                <td className="px-4 py-3">{analysis.patientName}</td>
+                <td className="px-4 py-3">{analysis.patient_name}</td>
                 <td className="px-4 py-3">{analysis.modality}</td>
+                <td className="px-4 py-3">
+                  {analysis.study_file_name ?? "-"}
+                  {analysis.study_file_size_bytes ? (
+                    <span className="block text-xs text-zinc-500">
+                      {(analysis.study_file_size_bytes / (1024 * 1024)).toFixed(2)} MB
+                    </span>
+                  ) : null}
+                </td>
                 <td className="px-4 py-3">{analysis.status}</td>
-                <td className="px-4 py-3">{analysis.createdAt}</td>
+                <td className="px-4 py-3">{new Date(analysis.created_at).toLocaleDateString()}</td>
               </tr>
             ))}
           </tbody>
