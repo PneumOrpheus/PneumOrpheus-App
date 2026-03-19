@@ -69,37 +69,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: uploadError.message }, { status: 500 });
     }
 
-    const { error: patientError } = await supabase.from("patients").upsert(
-      {
-        id: patientId,
-        user_id: user.id,
-        name: patientName,
-        email: clinicianEmail,
-      },
-      { onConflict: "id" },
-    );
-
-    if (patientError) {
-      return NextResponse.json({ error: patientError.message }, { status: 500 });
-    }
-
-    const { error: analysisError } = await supabase.from("analyses").insert({
-      id: analysisId,
-      user_id: user.id,
-      patient_id: patientId,
-      patient_name: patientName,
-      modality,
-      status: "In Review",
-      findings: "Report submitted. Processing in progress.",
-      classifications: [],
-      study_file_path: storagePath,
-      study_file_name: studyFile.name,
-      study_file_size_bytes: studyFile.size,
-      study_file_mime_type: studyFile.type || null,
+    const { error: rpcError } = await supabase.rpc("create_analysis_atomic", {
+      p_analysis_id: analysisId,
+      p_patient_id: patientId,
+      p_patient_name: patientName,
+      p_modality: modality,
+      p_study_file_path: storagePath,
+      p_study_file_name: studyFile.name,
+      p_study_file_size_bytes: studyFile.size,
+      p_study_file_mime_type: studyFile.type || null,
+      p_clinician_email: clinicianEmail,
+      p_findings: "Report submitted. Processing in progress.",
     });
 
-    if (analysisError) {
-      return NextResponse.json({ error: analysisError.message }, { status: 500 });
+    if (rpcError) {
+      await supabase.storage.from("study-files").remove([storagePath]);
+      return NextResponse.json({ error: rpcError.message }, { status: 500 });
     }
 
     return NextResponse.json({ id: analysisId }, { status: 201 });

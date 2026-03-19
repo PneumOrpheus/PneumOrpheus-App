@@ -67,6 +67,109 @@ begin
 end;
 $$;
 
+create or replace function public.create_analysis_atomic(
+  p_analysis_id text,
+  p_patient_id text,
+  p_patient_name text,
+  p_modality public.analysis_modality,
+  p_study_file_path text,
+  p_study_file_name text,
+  p_study_file_size_bytes bigint,
+  p_study_file_mime_type text,
+  p_clinician_email text,
+  p_findings text default 'Report submitted. Processing in progress.'
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  current_ids text[];
+begin
+  if auth.uid() is null then
+    raise exception 'Unauthorized';
+  end if;
+
+  insert into public.patients (
+    id,
+    user_id,
+    name,
+    email
+  )
+  values (
+    p_patient_id,
+    auth.uid(),
+    p_patient_name,
+    p_clinician_email
+  )
+  on conflict (id) do update
+    set
+      name = excluded.name,
+      email = excluded.email,
+      user_id = excluded.user_id;
+
+  insert into public.analyses (
+    id,
+    user_id,
+    patient_id,
+    patient_name,
+    modality,
+    status,
+    findings,
+    classifications,
+    study_file_path,
+    study_file_name,
+    study_file_size_bytes,
+    study_file_mime_type
+  )
+  values (
+    p_analysis_id,
+    auth.uid(),
+    p_patient_id,
+    p_patient_name,
+    p_modality,
+    'In Review',
+    p_findings,
+    '[]'::jsonb,
+    p_study_file_path,
+    p_study_file_name,
+    p_study_file_size_bytes,
+    p_study_file_mime_type
+  );
+
+  select recent_analysis_ids
+  into current_ids
+  from public.patients
+  where id = p_patient_id and user_id = auth.uid()
+  for update;
+
+  current_ids := array_remove(coalesce(current_ids, '{}'::text[]), p_analysis_id);
+  current_ids := array_prepend(p_analysis_id, current_ids);
+
+  if coalesce(array_length(current_ids, 1), 0) > 20 then
+    current_ids := current_ids[1:20];
+  end if;
+
+  update public.patients
+  set recent_analysis_ids = current_ids
+  where id = p_patient_id and user_id = auth.uid();
+end;
+$$;
+
+grant execute on function public.create_analysis_atomic(
+  text,
+  text,
+  text,
+  public.analysis_modality,
+  text,
+  text,
+  bigint,
+  text,
+  text,
+  text
+) to authenticated;
+
 drop trigger if exists set_patients_updated_at on public.patients;
 create trigger set_patients_updated_at
 before update on public.patients
