@@ -68,33 +68,33 @@ export default async function Home() {
         </article>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="flex flex-row gap-4">
         <Link
           href="/upload"
-          className="rounded-xl border border-brand/20 bg-white p-5 shadow-sm transition hover:border-brand/40 hover:bg-brand/5"
+          className="flex min-w-0 flex-1 flex-col rounded-2xl border border-brand/20 bg-gradient-to-br from-brand via-third to-fifth p-5 text-white shadow-sm transition hover:brightness-105"
         >
           <h2 className="text-lg font-semibold">Create New Report</h2>
-          <p className="mt-1 text-sm text-zinc-600">
+          <p className="mt-1 text-sm text-white/90">
             Start a new diagnostic run by uploading DICOM or NIfTI data.
           </p>
         </Link>
 
         <Link
           href="/analyses"
-          className="rounded-xl border border-brand/20 bg-white p-5 shadow-sm transition hover:border-brand/40 hover:bg-brand/5"
+          className="flex min-w-0 flex-1 flex-col rounded-2xl border border-brand/20 bg-gradient-to-br from-brand via-third to-fifth p-5 text-white shadow-sm transition hover:brightness-105"
         >
           <h2 className="text-lg font-semibold">Review Analyses</h2>
-          <p className="mt-1 text-sm text-zinc-600">
+          <p className="mt-1 text-sm text-white/90">
             Browse generated reports and inspect per-side model outputs.
           </p>
         </Link>
 
         <Link
           href="/patients"
-          className="rounded-xl border border-brand/20 bg-white p-5 shadow-sm transition hover:border-brand/40 hover:bg-brand/5 md:col-span-2"
+          className="flex min-w-0 flex-1 flex-col rounded-2xl border border-brand/20 bg-gradient-to-br from-brand via-third to-fifth p-5 text-white shadow-sm transition hover:brightness-105"
         >
           <h2 className="text-lg font-semibold">Patient Overview</h2>
-          <p className="mt-1 text-sm text-zinc-600">
+          <p className="mt-1 text-sm text-white/90">
             Track patients with their recent imaging analyses.
           </p>
         </Link>
