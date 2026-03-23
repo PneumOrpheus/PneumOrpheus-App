@@ -24,6 +24,7 @@ export default async function AnalysesPage() {
     .order("created_at", { ascending: false });
 
   const analyses = (data ?? []) as AnalysisRow[];
+  const cellLinkClass = "block -mx-4 -my-3 px-4 py-3 focus-visible:outline-none";
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
@@ -56,27 +57,49 @@ export default async function AnalysesPage() {
             </tr>
           </thead>
           <tbody>
-            {analyses.map((analysis) => (
-              <tr key={analysis.id} className="border-t border-brand/10">
-                <td className="px-4 py-3">
-                  <Link href={`/analysis/${analysis.id}`} className="font-medium underline-offset-4 hover:underline">
-                    {analysis.id}
-                  </Link>
-                </td>
-                <td className="px-4 py-3">{analysis.patient_name}</td>
-                <td className="px-4 py-3">{analysis.modality}</td>
-                <td className="px-4 py-3">
-                  {analysis.study_file_name ?? "-"}
-                  {analysis.study_file_size_bytes ? (
-                    <span className="block text-xs text-zinc-500">
-                      {(analysis.study_file_size_bytes / (1024 * 1024)).toFixed(2)} MB
-                    </span>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3">{analysis.status}</td>
-                <td className="px-4 py-3">{new Date(analysis.created_at).toLocaleDateString()}</td>
-              </tr>
-            ))}
+            {analyses.map((analysis) => {
+              const analysisHref = `/analysis/${analysis.id}`;
+
+              return (
+                <tr key={analysis.id} className="cursor-pointer border-t border-brand/10 transition-colors hover:bg-brand/5 focus-within:bg-brand/10">
+                  <td className="px-4 py-3">
+                    <Link href={analysisHref} className={`${cellLinkClass} font-medium`}>
+                      {analysis.id}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link href={analysisHref} className={cellLinkClass}>
+                      {analysis.patient_name}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link href={analysisHref} className={cellLinkClass}>
+                      {analysis.modality}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link href={analysisHref} className={cellLinkClass}>
+                      {analysis.study_file_name ?? "-"}
+                      {analysis.study_file_size_bytes ? (
+                        <span className="block text-xs text-zinc-500">
+                          {(analysis.study_file_size_bytes / (1024 * 1024)).toFixed(2)} MB
+                        </span>
+                      ) : null}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link href={analysisHref} className={cellLinkClass}>
+                      {analysis.status}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link href={analysisHref} className={cellLinkClass}>
+                      {new Date(analysis.created_at).toLocaleDateString()}
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
