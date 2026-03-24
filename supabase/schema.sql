@@ -42,6 +42,11 @@ create table if not exists public.analyses (
   study_file_name text,
   study_file_size_bytes bigint,
   study_file_mime_type text,
+  segmentation_data jsonb,
+  cancer_type text,
+  classification_confidence double precision,
+  reasoning text,
+  proposed_tnm_stage text,
   updated_at timestamptz not null default timezone('utc'::text, now())
 );
 
@@ -51,6 +56,11 @@ alter table public.analyses add column if not exists study_file_path text;
 alter table public.analyses add column if not exists study_file_name text;
 alter table public.analyses add column if not exists study_file_size_bytes bigint;
 alter table public.analyses add column if not exists study_file_mime_type text;
+alter table public.analyses add column if not exists segmentation_data jsonb;
+alter table public.analyses add column if not exists cancer_type text;
+alter table public.analyses add column if not exists classification_confidence double precision;
+alter table public.analyses add column if not exists reasoning text;
+alter table public.analyses add column if not exists proposed_tnm_stage text;
 
 create index if not exists idx_patients_user_id on public.patients(user_id);
 create index if not exists idx_analyses_user_id on public.analyses(user_id);
@@ -77,7 +87,14 @@ create or replace function public.create_analysis_atomic(
   p_study_file_size_bytes bigint,
   p_study_file_mime_type text,
   p_clinician_email text,
-  p_findings text default 'Report submitted. Processing in progress.'
+  p_status public.analysis_status default 'In Review',
+  p_findings text default 'Report submitted. Processing in progress.',
+  p_classifications jsonb default '[]'::jsonb,
+  p_segmentation_data jsonb default null,
+  p_cancer_type text default null,
+  p_classification_confidence double precision default null,
+  p_reasoning text default null,
+  p_proposed_tnm_stage text default null
 )
 returns void
 language plpgsql
@@ -121,7 +138,12 @@ begin
     study_file_path,
     study_file_name,
     study_file_size_bytes,
-    study_file_mime_type
+    study_file_mime_type,
+    segmentation_data,
+    cancer_type,
+    classification_confidence,
+    reasoning,
+    proposed_tnm_stage
   )
   values (
     p_analysis_id,
@@ -129,13 +151,18 @@ begin
     p_patient_id,
     p_patient_name,
     p_modality,
-    'In Review',
+    p_status,
     p_findings,
-    '[]'::jsonb,
+    coalesce(p_classifications, '[]'::jsonb),
     p_study_file_path,
     p_study_file_name,
     p_study_file_size_bytes,
-    p_study_file_mime_type
+    p_study_file_mime_type,
+    p_segmentation_data,
+    p_cancer_type,
+    p_classification_confidence,
+    p_reasoning,
+    p_proposed_tnm_stage
   );
 
   select recent_analysis_ids
@@ -166,6 +193,13 @@ grant execute on function public.create_analysis_atomic(
   text,
   bigint,
   text,
+  text,
+  public.analysis_status,
+  text,
+  jsonb,
+  jsonb,
+  text,
+  double precision,
   text,
   text
 ) to authenticated;
