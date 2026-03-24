@@ -20,6 +20,11 @@ type AnalysisRow = {
   study_file_name: string | null;
   study_file_size_bytes: number | null;
   study_file_mime_type: string | null;
+  segmentation_data: unknown;
+  cancer_type: string | null;
+  classification_confidence: number | null;
+  reasoning: string | null;
+  proposed_tnm_stage: string | null;
 };
 
 type PatientRow = {
@@ -41,7 +46,7 @@ export default async function AnalysisDetailPage({
   const { data: analysisData } = await supabase
     .from("analyses")
     .select(
-      "id, patient_id, patient_name, created_at, modality, status, findings, classifications, study_file_name, study_file_size_bytes, study_file_mime_type",
+      "id, patient_id, patient_name, created_at, modality, status, findings, classifications, study_file_name, study_file_size_bytes, study_file_mime_type, segmentation_data, cancer_type, classification_confidence, reasoning, proposed_tnm_stage",
     )
     .eq("id", id)
     .eq("user_id", user?.id ?? "")
@@ -111,6 +116,29 @@ export default async function AnalysisDetailPage({
           <h2 className="text-lg font-semibold">Classification Result</h2>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{analysis.findings}</p>
 
+          <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
+            <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+              <dt className="text-zinc-500 dark:text-zinc-400">Predicted Cancer Type</dt>
+              <dd className="mt-1 font-medium">{analysis.cancer_type ?? "-"}</dd>
+            </div>
+            <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+              <dt className="text-zinc-500 dark:text-zinc-400">Top Confidence</dt>
+              <dd className="mt-1 font-medium">
+                {analysis.classification_confidence !== null
+                  ? `${Math.round(analysis.classification_confidence * 100)}%`
+                  : "-"}
+              </dd>
+            </div>
+            <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 sm:col-span-2">
+              <dt className="text-zinc-500 dark:text-zinc-400">Reasoning</dt>
+              <dd className="mt-1">{analysis.reasoning ?? "-"}</dd>
+            </div>
+            <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 sm:col-span-2">
+              <dt className="text-zinc-500 dark:text-zinc-400">Proposed TNM Stage</dt>
+              <dd className="mt-1 font-medium">{analysis.proposed_tnm_stage ?? "-"}</dd>
+            </div>
+          </dl>
+
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {(analysis.classifications ?? []).map((item) => (
               <div key={item.side} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
@@ -129,6 +157,17 @@ export default async function AnalysisDetailPage({
               No classification output available yet. The report is still being processed.
             </p>
           ) : null}
+
+          <div className="mt-4 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+            <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Segmentation Data (for visualization)
+            </p>
+            <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-zinc-600 dark:text-zinc-300">
+              {analysis.segmentation_data
+                ? JSON.stringify(analysis.segmentation_data, null, 2)
+                : "No segmentation output available."}
+            </pre>
+          </div>
         </article>
       </div>
     </section>
