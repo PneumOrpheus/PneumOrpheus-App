@@ -23,6 +23,10 @@ Returns JSON including:
 - `findings`
 - `classifications`
 
+Status endpoint:
+
+- `GET /cancer`
+
 ## Python (FastAPI)
 
 Location: `inference-stubs/python-fastapi`

@@ -247,27 +247,16 @@ export async function POST(request: Request) {
 
     const normalizedInference = normalizeInferenceResult(inferenceResult);
 
+    // Sensitive scan bytes are used only in-memory for inference and are not persisted for privacy reasons. We store metadata and inference results in the database, but not the raw file.
     const safeFileName = sanitizeFileName(studyFile.name);
-    const storagePath = `${user.id}/${analysisId}/${Date.now()}-${safeFileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("study-files")
-      .upload(storagePath, studyFile, {
-        upsert: false,
-        contentType: studyFile.type || undefined,
-      });
-
-    if (uploadError) {
-      return NextResponse.json({ error: uploadError.message }, { status: 500 });
-    }
 
     const { error: rpcError } = await supabase.rpc("create_analysis_atomic", {
       p_analysis_id: analysisId,
       p_patient_id: patientId,
       p_patient_name: patientName,
       p_modality: modality,
-      p_study_file_path: storagePath,
-      p_study_file_name: studyFile.name,
+      p_study_file_path: null,
+      p_study_file_name: safeFileName,
       p_study_file_size_bytes: studyFile.size,
       p_study_file_mime_type: studyFile.type || null,
       p_clinician_email: clinicianEmail,
@@ -282,7 +271,6 @@ export async function POST(request: Request) {
     });
 
     if (rpcError) {
-      await supabase.storage.from("study-files").remove([storagePath]);
       return NextResponse.json({ error: rpcError.message }, { status: 500 });
     }
 

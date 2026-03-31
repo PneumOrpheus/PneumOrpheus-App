@@ -11,8 +11,8 @@ from fastapi.responses import JSONResponse
 app = FastAPI(title="PneumOrpheus Inference Stub", version="0.1.0")
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
+@app.get("/cancer")
+def cancer() -> dict[str, str]:
     return {"status": "ok"}
 
 

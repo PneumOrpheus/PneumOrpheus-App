@@ -103,26 +103,24 @@ Update these defaults in [azure-pipelines.yml](azure-pipelines.yml) or set them 
 - `acrLoginServer` (for example: `myregistry.azurecr.io`)
 - `keyVaultName`
 - `webAppResourceGroup`
-- `inferenceApiUrl`
+- `inferenceServerBaseUrl` (for example: `https://<pneumorpheus-server-app>.azurewebsites.net`)
 - `keyVaultSupabaseUrlSecretName` (default: `NEXT_PUBLIC_SUPABASE_URL`)
 - `keyVaultSupabaseAnonKeySecretName` (default: `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY`)
 - `keyVaultInferenceApiKeySecretName` (optional)
 - `appImageRepository`
-- `inferencePythonImageRepository`
 
 Optional deploy targets (leave empty to skip deploy):
 
 - `webAppName`
-- `webAppInferencePythonName`
 
 ### Required Azure App Settings
 
 The pipeline now sets app settings during deploy:
 
 - Pulls `NEXT_PUBLIC_SUPABASE_URL` and Supabase publishable key from Azure Key Vault
-- Sets `INFERENCE_API_URL` from pipeline variable `inferenceApiUrl`
+- Sets `INFERENCE_API_URL` to `$(inferenceServerBaseUrl)/infer`
 - Sets `INFERENCE_API_KEY` from Key Vault when `keyVaultInferenceApiKeySecretName` is provided
-- Sets `WEBSITES_PORT` (`3000` for web app, `8001` for inference apps)
+- Sets `WEBSITES_PORT=3000` for the web app
 
 ### Key Vault permissions
 
@@ -132,8 +130,8 @@ Local `.env` remains for local development only; production secrets should stay 
 
 ### Health probes
 
-- Web app health endpoint: `/api/health`
-- Inference stubs health endpoint: `/health`
+- Web app health endpoint: `/api/cancer`
+- Inference server endpoint: `/cancer`
 
 ## Learn More
 

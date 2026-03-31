@@ -1,33 +1,34 @@
 trigger:
   branches:
     include:
+      - production
       - main
       - develop
 
 pr:
   branches:
     include:
+      - production
       - main
       - develop
 
 variables:
+  agentPoolName: "PneumOrpheusPool"
   nodeVersion: "20.x"
-  dockerRegistryServiceConnection: "YOUR_ACR_SERVICE_CONNECTION"
-  azureSubscriptionServiceConnection: "YOUR_AZURE_SUBSCRIPTION_SERVICE_CONNECTION"
-  acrLoginServer: "yourregistry.azurecr.io"
-  keyVaultName: ""
-  webAppResourceGroup: ""
+  azureSubscriptionServiceConnection: "prod-pneumorpheus-server"
+  acrName: "pneumorpheusacr"
+
+  keyVaultName: "PneumOrpheus"
+  webAppResourceGroup: "AI-Diagnostics"
   keyVaultSupabaseUrlSecretName: "NEXT_PUBLIC_SUPABASE_URL"
   keyVaultSupabaseAnonKeySecretName: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY"
-  keyVaultInferenceApiKeySecretName: ""
-  inferenceApiUrl: ""
+  keyVaultInferenceApiKeySecretName: "MODEL-INFERENCE-API-KEY"
+  inferenceServerBaseUrl: "https://PneumOrpheus-Server.azurewebsites.net"
 
   appImageRepository: "pneumorpheus-app"
-  inferencePythonImageRepository: "pneumorpheus-inference-python"
 
-  # Optional deploy targets (leave empty to skip deploy tasks)
-  webAppName: ""
-  webAppInferencePythonName: ""
+  # Optional deploy target
+  webAppName: "PneumOrpheus-App"
 
   tag: "$(Build.SourceBranchName)-$(Build.BuildId)"
 
@@ -38,7 +39,7 @@ stages:
       - job: LintBuild
         displayName: "Lint and Build Next.js"
         pool:
-          vmImage: "ubuntu-latest"
+          name: "$(agentPoolName)"
         steps:
           - checkout: self
 
@@ -57,40 +58,37 @@ stages:
             displayName: "Build Next.js app"
 
   - stage: Containerize
-    displayName: "Build and Push Images"
+    displayName: "Build and Push Image"
     dependsOn: Validate
     condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
     jobs:
       - job: BuildPush
-        displayName: "Build and push container images"
+        displayName: "Build and push app image"
         pool:
-          vmImage: "ubuntu-latest"
+          name: "$(agentPoolName)"
         steps:
           - checkout: self
 
-          - task: Docker@2
-            displayName: "Build and push app image"
+          - task: AzureCLI@2
+            displayName: "Build and push app image in ACR"
             inputs:
-              command: buildAndPush
-              repository: "$(appImageRepository)"
-              dockerfile: "$(Build.SourcesDirectory)/Dockerfile"
-              buildContext: "$(Build.SourcesDirectory)"
-              containerRegistry: "$(dockerRegistryServiceConnection)"
-              tags: |
-                $(tag)
-                latest
+              azureSubscription: "$(azureSubscriptionServiceConnection)"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                set -euo pipefail
 
-          - task: Docker@2
-            displayName: "Build and push Python inference image"
-            inputs:
-              command: buildAndPush
-              repository: "$(inferencePythonImageRepository)"
-              dockerfile: "$(Build.SourcesDirectory)/inference-stubs/python-fastapi/Dockerfile"
-              buildContext: "$(Build.SourcesDirectory)/inference-stubs/python-fastapi"
-              containerRegistry: "$(dockerRegistryServiceConnection)"
-              tags: |
-                $(tag)
-                latest
+                if [[ -z "$(acrName)" ]]; then
+                  echo "acrName is required."
+                  exit 1
+                fi
+
+                az acr build \
+                  --registry "$(acrName)" \
+                  --image "$(appImageRepository):$(tag)" \
+                  --image "$(appImageRepository):latest" \
+                  --file "$(Build.SourcesDirectory)/Dockerfile" \
+                  "$(Build.SourcesDirectory)"
 
   - stage: Deploy
     displayName: "Deploy to Azure Web App (optional)"
@@ -98,9 +96,9 @@ stages:
     condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
     jobs:
       - job: DeployContainers
-        displayName: "Deploy container images"
+        displayName: "Deploy app container"
         pool:
-          vmImage: "ubuntu-latest"
+          name: "$(agentPoolName)"
         steps:
           - task: AzureCLI@2
             displayName: "Pre-deploy validation"
@@ -112,52 +110,102 @@ stages:
               inlineScript: |
                 set -euo pipefail
 
-                if [[ -z "$(AI-Diagnostics)" ]]; then
+                if [[ -z "$(webAppResourceGroup)" ]]; then
                   echo "webAppResourceGroup is required when webAppName is set."
                   exit 1
                 fi
 
-                if [[ -z "$(PneumOrpheus)" ]]; then
+                if [[ -z "$(keyVaultName)" ]]; then
                   echo "keyVaultName is required when webAppName is set."
                   exit 1
                 fi
 
-                if [[ -z "$(inferenceApiUrl)" ]]; then
-                  echo "inferenceApiUrl is required when webAppName is set."
+                if [[ -z "$(acrName)" ]]; then
+                  echo "acrName is required when webAppName is set."
                   exit 1
                 fi
 
-                if [[ -z "$(NEXT-PUBLIC-SUPABASE-URL)" || -z "$(NEXT-PUBLIC-PUBLISHABLE-DEFAULT-KEY)" ]]; then
+                if [[ -z "$(inferenceServerBaseUrl)" ]]; then
+                  echo "inferenceServerBaseUrl is required when webAppName is set."
+                  exit 1
+                fi
+
+                if [[ -z "$(keyVaultSupabaseUrlSecretName)" || -z "$(keyVaultSupabaseAnonKeySecretName)" ]]; then
                   echo "Key Vault secret name variables for Supabase are required."
                   exit 1
                 fi
 
                 az keyvault secret show \
-                  --vault-name "$(PneumOrpheus)" \
-                  --name "$(NEXT-PUBLIC-SUPABASE-URL)" \
+                  --vault-name "$(keyVaultName)" \
+                  --name "$(keyVaultSupabaseUrlSecretName)" \
                   --query id -o tsv >/dev/null
 
                 az keyvault secret show \
-                  --vault-name "$(PneumOrpheus)" \
-                  --name "$(NEXT-PUBLIC-PUBLISHABLE-DEFAULT-KEY)" \
+                  --vault-name "$(keyVaultName)" \
+                  --name "$(keyVaultSupabaseAnonKeySecretName)" \
                   --query id -o tsv >/dev/null
 
                 if [[ -n "$(keyVaultInferenceApiKeySecretName)" ]]; then
                   az keyvault secret show \
-                    --vault-name "$(PneumOrpheus)" \
+                    --vault-name "$(keyVaultName)" \
                     --name "$(keyVaultInferenceApiKeySecretName)" \
                     --query id -o tsv >/dev/null
                 fi
 
                 echo "Pre-deploy validation passed."
 
-          - task: AzureWebAppContainer@1
-            displayName: "Deploy main app container"
+          - task: AzureCLI@2
+            displayName: "Deploy app container via managed identity"
             condition: and(succeeded(), ne(variables['webAppName'], ''))
             inputs:
               azureSubscription: "$(azureSubscriptionServiceConnection)"
-              appName: "$(webAppName)"
-              containers: "$(acrLoginServer)/$(appImageRepository):$(tag)"
+              scriptType: "bash"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                set -euo pipefail
+
+                acr_login_server="$(acrName).azurecr.io"
+                image_name="${acr_login_server}/$(appImageRepository):$(tag)"
+
+                az webapp identity assign \
+                  --resource-group "$(webAppResourceGroup)" \
+                  --name "$(webAppName)" \
+                  --output none
+
+                principal_id=$(az webapp identity show \
+                  --resource-group "$(webAppResourceGroup)" \
+                  --name "$(webAppName)" \
+                  --query principalId -o tsv)
+
+                if [[ -z "$principal_id" ]]; then
+                  echo "Unable to resolve managed identity principalId for web app $(webAppName)."
+                  exit 1
+                fi
+
+                acr_id=$(az acr show \
+                  --name "$(acrName)" \
+                  --resource-group "$(webAppResourceGroup)" \
+                  --query id -o tsv)
+
+                az role assignment create \
+                  --assignee-object-id "$principal_id" \
+                  --assignee-principal-type ServicePrincipal \
+                  --role AcrPull \
+                  --scope "$acr_id" \
+                  --output none || true
+
+                az webapp config set \
+                  --resource-group "$(webAppResourceGroup)" \
+                  --name "$(webAppName)" \
+                  --generic-configurations '{"acrUseManagedIdentityCreds": true}' \
+                  --output none
+
+                az webapp config container set \
+                  --resource-group "$(webAppResourceGroup)" \
+                  --name "$(webAppName)" \
+                  --container-image-name "$image_name" \
+                  --container-registry-url "https://${acr_login_server}" \
+                  --output none
 
           - task: AzureCLI@2
             displayName: "Configure main app settings from Key Vault"
@@ -169,64 +217,45 @@ stages:
               inlineScript: |
                 set -euo pipefail
 
-                if [[ -z "$(inferenceApiUrl)" ]]; then
-                  echo "inferenceApiUrl is required for web app deployment."
+                base_url="$(inferenceServerBaseUrl)"
+                base_url="${base_url%/}"
+                inference_api_url="${base_url}/infer"
+
+                if [[ -z "$base_url" ]]; then
+                  echo "inferenceServerBaseUrl is required for web app deployment."
                   exit 1
                 fi
 
                 supabase_url=$(az keyvault secret show \
-                  --vault-name "$(PneumOrpheus)" \
-                  --name "$(NEXT-PUBLIC-SUPABASE-URL)" \
+                  --vault-name "$(keyVaultName)" \
+                  --name "$(keyVaultSupabaseUrlSecretName)" \
                   --query value -o tsv)
 
                 supabase_anon_key=$(az keyvault secret show \
-                  --vault-name "$(PneumOrpheus)" \
-                  --name "$(NEXT-PUBLIC-PUBLISHABLE-DEFAULT-KEY)" \
+                  --vault-name "$(keyVaultName)" \
+                  --name "$(keyVaultSupabaseAnonKeySecretName)" \
                   --query value -o tsv)
 
                 az webapp config appsettings set \
-                  --resource-group "$(AI-Diagnostics)" \
+                  --resource-group "$(webAppResourceGroup)" \
                   --name "$(webAppName)" \
                   --settings \
                     NEXT_PUBLIC_SUPABASE_URL="$supabase_url" \
                     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY="$supabase_anon_key" \
-                    INFERENCE_API_URL="$(inferenceApiUrl)" \
+                    INFERENCE_API_URL="$inference_api_url" \
                     WEBSITES_PORT="3000" \
                     NODE_ENV="production" \
                   --output none
 
                 if [[ -n "$(keyVaultInferenceApiKeySecretName)" ]]; then
                   inference_api_key=$(az keyvault secret show \
-                    --vault-name "$(PneumOrpheus)" \
+                    --vault-name "$(keyVaultName)" \
                     --name "$(keyVaultInferenceApiKeySecretName)" \
                     --query value -o tsv)
 
                   az webapp config appsettings set \
-                    --resource-group "$(AI-Diagnostics)" \
+                    --resource-group "$(webAppResourceGroup)" \
                     --name "$(webAppName)" \
                     --settings INFERENCE_API_KEY="$inference_api_key" \
                     --output none
                 fi
-
-          - task: AzureWebAppContainer@1
-            displayName: "Deploy Python inference container"
-            condition: and(succeeded(), ne(variables['webAppInferencePythonName'], ''))
-            inputs:
-              azureSubscription: "$(azureSubscriptionServiceConnection)"
-              appName: "$(webAppInferencePythonName)"
-              containers: "$(acrLoginServer)/$(inferencePythonImageRepository):$(tag)"
-
-          - task: AzureCLI@2
-            displayName: "Configure Python inference app settings"
-            condition: and(succeeded(), ne(variables['webAppInferencePythonName'], ''), ne(variables['webAppResourceGroup'], ''))
-            inputs:
-              azureSubscription: "$(azureSubscriptionServiceConnection)"
-              scriptType: "bash"
-              scriptLocation: "inlineScript"
-              inlineScript: |
-                set -euo pipefail
-                az webapp config appsettings set \
-                  --resource-group "$(webAppResourceGroup)" \
-                  --name "$(webAppInferencePythonName)" \
-                  --settings WEBSITES_PORT="8001" \
-                  --output none
