@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import { AnalysisVisualization } from "@/components/analysis-visualization";
 
 type ClassificationItem = {
   side: string;
@@ -25,6 +26,68 @@ type AnalysisRow = {
   classification_confidence: number | null;
   reasoning: string | null;
   proposed_tnm_stage: string | null;
+};
+
+type VisualizationSlice = {
+  sliceIndex: number;
+  imageDataUrl: string;
+  hasMask?: boolean;
+  maskCoverage?: number;
+};
+
+type VisualizationPayload = {
+  imageFormat?: string;
+  totalSlices?: number;
+  defaultSliceIndex?: number;
+  slices: VisualizationSlice[];
+};
+
+const asObject = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, unknown>;
+};
+
+const parseVisualization = (value: unknown): VisualizationPayload | null => {
+  const segmentationData = asObject(value);
+  if (!segmentationData) {
+    return null;
+  }
+
+  const visualization = asObject(segmentationData.visualization);
+  if (!visualization || !Array.isArray(visualization.slices)) {
+    return null;
+  }
+
+  const slices = visualization.slices
+    .map((slice) => {
+      const parsed = asObject(slice);
+      if (!parsed || typeof parsed.sliceIndex !== "number" || typeof parsed.imageDataUrl !== "string") {
+        return null;
+      }
+
+      return {
+        sliceIndex: parsed.sliceIndex,
+        imageDataUrl: parsed.imageDataUrl,
+        hasMask: typeof parsed.hasMask === "boolean" ? parsed.hasMask : undefined,
+        maskCoverage: typeof parsed.maskCoverage === "number" ? parsed.maskCoverage : undefined,
+      };
+    })
+    .filter((slice): slice is VisualizationSlice => Boolean(slice));
+
+  if (!slices.length) {
+    return null;
+  }
+
+  return {
+    imageFormat: typeof visualization.imageFormat === "string" ? visualization.imageFormat : undefined,
+    totalSlices: typeof visualization.totalSlices === "number" ? visualization.totalSlices : undefined,
+    defaultSliceIndex:
+      typeof visualization.defaultSliceIndex === "number" ? visualization.defaultSliceIndex : undefined,
+    slices,
+  };
 };
 
 type PatientRow = {
@@ -66,6 +129,7 @@ export default async function AnalysisDetailPage({
     .maybeSingle();
 
   const patient = patientData as PatientRow | null;
+  const visualization = parseVisualization(analysis.segmentation_data);
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
@@ -116,27 +180,40 @@ export default async function AnalysisDetailPage({
           <h2 className="text-lg font-semibold">Classification Result</h2>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{analysis.findings}</p>
 
+          {visualization ? (
+            <AnalysisVisualization
+              visualization={visualization}
+              cancerType={analysis.cancer_type}
+              classificationConfidence={analysis.classification_confidence}
+              proposedTnmStage={analysis.proposed_tnm_stage}
+            />
+          ) : null}
+
           <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
-            <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-              <dt className="text-zinc-500 dark:text-zinc-400">Predicted Cancer Type</dt>
-              <dd className="mt-1 font-medium">{analysis.cancer_type ?? "-"}</dd>
-            </div>
-            <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-              <dt className="text-zinc-500 dark:text-zinc-400">Top Confidence</dt>
-              <dd className="mt-1 font-medium">
-                {analysis.classification_confidence !== null
-                  ? `${Math.round(analysis.classification_confidence * 100)}%`
-                  : "-"}
-              </dd>
-            </div>
             <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 sm:col-span-2">
               <dt className="text-zinc-500 dark:text-zinc-400">Reasoning</dt>
               <dd className="mt-1">{analysis.reasoning ?? "-"}</dd>
             </div>
-            <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 sm:col-span-2">
-              <dt className="text-zinc-500 dark:text-zinc-400">Proposed TNM Stage</dt>
-              <dd className="mt-1 font-medium">{analysis.proposed_tnm_stage ?? "-"}</dd>
-            </div>
+            {!visualization ? (
+              <>
+                <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                  <dt className="text-zinc-500 dark:text-zinc-400">Predicted Cancer Type</dt>
+                  <dd className="mt-1 font-medium">{analysis.cancer_type ?? "-"}</dd>
+                </div>
+                <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                  <dt className="text-zinc-500 dark:text-zinc-400">Top Confidence</dt>
+                  <dd className="mt-1 font-medium">
+                    {analysis.classification_confidence !== null
+                      ? `${Math.round(analysis.classification_confidence * 100)}%`
+                      : "-"}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 sm:col-span-2">
+                  <dt className="text-zinc-500 dark:text-zinc-400">Proposed TNM Stage</dt>
+                  <dd className="mt-1 font-medium">{analysis.proposed_tnm_stage ?? "-"}</dd>
+                </div>
+              </>
+            ) : null}
           </dl>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
