@@ -18,7 +18,7 @@ variables:
   azureSubscriptionServiceConnection: "prod-pneumorpheus-app"
   acrName: "pneumorpheusacr"
   appServicePlanName: "pneumorpheus-plan"
-  manageRoleAssignments: "false"
+  manageRoleAssignments: "true"
 
   keyVaultName: "PneumOrpheus"
   webAppResourceGroup: "AI-Diagnostics-Norway"
