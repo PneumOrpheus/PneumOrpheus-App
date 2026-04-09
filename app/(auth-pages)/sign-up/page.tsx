@@ -16,8 +16,8 @@ export default function SignUpPage() {
 
   return (
     <div className="mx-auto w-full max-w-sm">
-      <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Sign up</h1>
-      <p className="mt-2 text-sm text-zinc-600">
+      <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">Sign up</h1>
+      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
         Already have an account?
         <Link href="/sign-in" className="ml-1 text-sm font-medium text-second hover:underline">
           Sign in
@@ -67,7 +67,7 @@ export default function SignUpPage() {
           setIsSubmitting(false);
         }}
       >
-        <label className="grid gap-1.5 text-sm text-zinc-700">
+        <label className="grid gap-1.5 text-sm text-zinc-700 dark:text-zinc-300">
           Email
           <input
             type="email"
@@ -75,12 +75,12 @@ export default function SignUpPage() {
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="you@example.com"
-            className="h-10 rounded-md border border-sixth bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+            className="h-10 rounded-md border border-sixth bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100"
             required
           />
         </label>
 
-        <label className="grid gap-1.5 text-sm text-zinc-700">
+        <label className="grid gap-1.5 text-sm text-zinc-700 dark:text-zinc-300">
           Password
           <input
             type="password"
@@ -88,7 +88,7 @@ export default function SignUpPage() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             placeholder="Create a password"
-            className="h-10 rounded-md border border-sixth bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+            className="h-10 rounded-md border border-sixth bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100"
             required
           />
         </label>
@@ -114,7 +114,7 @@ export default function SignUpPage() {
         </button>
       </form>
 
-      <p className="mt-4 text-xs text-zinc-500">
+      <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
         Register a clinician account to upload studies and review AI-assisted pulmonary reports.
       </p>
     </div>

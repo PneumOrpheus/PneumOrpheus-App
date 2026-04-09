@@ -54,16 +54,16 @@ export default async function Home() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <article className="rounded-xl border border-brand/20 bg-white p-5 shadow-sm">
-          <p className="text-sm text-zinc-500">Patients</p>
+        <article className="rounded-xl border border-brand/20 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Patients</p>
           <p className="mt-2 text-3xl font-semibold">{patientsCount}</p>
         </article>
-        <article className="rounded-xl border border-brand/20 bg-white p-5 shadow-sm">
-          <p className="text-sm text-zinc-500">Reports</p>
+        <article className="rounded-xl border border-brand/20 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Reports</p>
           <p className="mt-2 text-3xl font-semibold">{reportsCount}</p>
         </article>
-        <article className="rounded-xl border border-brand/20 bg-white p-5 shadow-sm">
-          <p className="text-sm text-zinc-500">Completed</p>
+        <article className="rounded-xl border border-brand/20 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Completed</p>
           <p className="mt-2 text-3xl font-semibold">{completedReports}</p>
         </article>
       </div>
@@ -100,7 +100,7 @@ export default async function Home() {
         </Link>
       </div>
 
-      <p className="text-sm text-zinc-600">
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
         Latest report: {latestReportId ?? "No reports yet"}
         {latestReportId ? (
           <>

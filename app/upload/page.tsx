@@ -35,7 +35,7 @@ export default function UploadPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-brand/20 bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-brand/20 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <form
           className="grid gap-4 sm:grid-cols-2"
           onSubmit={async (event) => {
@@ -80,7 +80,7 @@ export default function UploadPage() {
             Patient ID
             <input
               name="patientId"
-              className="rounded-md border border-sixth bg-transparent px-3 py-2"
+              className="rounded-md border border-sixth bg-transparent px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100"
               placeholder="P-2004"
               required
             />
@@ -89,14 +89,14 @@ export default function UploadPage() {
             Patient Name
             <input
               name="patientName"
-              className="rounded-md border border-sixth bg-transparent px-3 py-2"
+              className="rounded-md border border-sixth bg-transparent px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100"
               placeholder="John Doe"
               required
             />
           </label>
           <label className="grid gap-1 text-sm">
             Study Modality
-            <select name="modality" className="rounded-md border border-sixth bg-transparent px-3 py-2" required>
+            <select name="modality" className="rounded-md border border-sixth bg-transparent px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100" required>
               <option value="CT Chest">Chest CT</option>
               <option value="Chest PET">Chest PET</option>
             </select>
@@ -107,7 +107,7 @@ export default function UploadPage() {
               name="clinicianEmail"
               type="email"
               autoComplete="email"
-              className="rounded-md border border-sixth bg-transparent px-3 py-2"
+              className="rounded-md border border-sixth bg-transparent px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100"
               placeholder="clinician@example.com"
               required
             />
@@ -118,7 +118,7 @@ export default function UploadPage() {
               name="studyFile"
               type="file"
               accept=".dcm,.dicom,.nii,.nii.gz,.gz,application/dicom,application/gzip,application/x-gzip,application/octet-stream"
-              className="rounded-md border border-dashed border-sixth px-3 py-2"
+              className="rounded-md border border-dashed border-sixth px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100"
               onChange={(event) => {
                 const selectedFile = event.currentTarget.files?.[0];
                 if (!selectedFile) {
@@ -160,7 +160,7 @@ export default function UploadPage() {
         </form>
       </div>
 
-      <p className="text-sm text-zinc-600">
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
         Need historical reports first? Browse <Link href="/analyses" className="underline underline-offset-4">existing analyses</Link>.
       </p>
     </section>

@@ -64,14 +64,14 @@ export default async function PatientsPage() {
           const latest = latestByReference ?? latestByDate;
 
           return (
-            <article key={patient.id} className="rounded-xl border border-brand/20 bg-white p-5 shadow-sm">
+            <article key={patient.id} className="rounded-xl border border-brand/20 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <div className="mb-4 space-y-1">
                 <h2 className="text-lg font-semibold">{patient.name}</h2>
-                <p className="text-sm text-zinc-600">
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
                   {patient.id} · {patient.sex ?? "Unknown"} · {patient.age ?? "Unknown"}
                   {patient.age ? " years" : ""}
                 </p>
-                <p className="text-sm text-zinc-600">{patient.email}</p>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">{patient.email}</p>
               </div>
 
               {latest ? (
@@ -79,17 +79,17 @@ export default async function PatientsPage() {
                   <p>
                     Latest report: <strong>{latest.id}</strong>
                   </p>
-                  <p className="text-zinc-600">
+                  <p className="text-zinc-600 dark:text-zinc-400">
                     {latest.modality} · {latest.status} · {new Date(latest.created_at).toLocaleDateString()}
                   </p>
-                  <p className="text-zinc-600">File: {latest.study_file_name ?? "-"}</p>
-                  <p className="text-zinc-600">{latest.findings}</p>
+                  <p className="text-zinc-600 dark:text-zinc-400">File: {latest.study_file_name ?? "-"}</p>
+                  <p className="text-zinc-600 dark:text-zinc-400">{latest.findings}</p>
                   <Link href={`/analysis/${latest.id}`} className="inline-block underline underline-offset-4">
                     Open report
                   </Link>
                 </div>
               ) : (
-                <p className="text-sm text-zinc-600">No analyses available.</p>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">No analyses available.</p>
               )}
             </article>
           );

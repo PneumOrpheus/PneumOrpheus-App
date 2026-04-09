@@ -44,9 +44,9 @@ export default async function AnalysesPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-brand/20 bg-white shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-brand/10">
+      <div className="overflow-hidden rounded-xl border border-brand/20 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <table className="w-full text-left text-sm text-zinc-900 dark:text-zinc-100">
+          <thead className="bg-brand/10 dark:bg-brand/20">
             <tr>
               <th className="px-4 py-3 font-medium">Report</th>
               <th className="px-4 py-3 font-medium">Patient</th>
@@ -61,7 +61,7 @@ export default async function AnalysesPage() {
               const analysisHref = `/analysis/${analysis.id}`;
 
               return (
-                <tr key={analysis.id} className="cursor-pointer border-t border-brand/10 transition-colors hover:bg-brand/5 focus-within:bg-brand/10">
+                <tr key={analysis.id} className="cursor-pointer border-t border-brand/10 transition-colors hover:bg-brand/5 focus-within:bg-brand/10 dark:border-zinc-800 dark:hover:bg-zinc-800/60 dark:focus-within:bg-zinc-800">
                   <td className="px-4 py-3">
                     <Link href={analysisHref} className={`${cellLinkClass} font-medium`}>
                       {analysis.id}
@@ -81,7 +81,7 @@ export default async function AnalysesPage() {
                     <Link href={analysisHref} className={cellLinkClass}>
                       {analysis.study_file_name ?? "-"}
                       {analysis.study_file_size_bytes ? (
-                        <span className="block text-xs text-zinc-500">
+                        <span className="block text-xs text-zinc-500 dark:text-zinc-400">
                           {(analysis.study_file_size_bytes / (1024 * 1024)).toFixed(2)} MB
                         </span>
                       ) : null}
