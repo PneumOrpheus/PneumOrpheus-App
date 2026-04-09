@@ -23,7 +23,7 @@ variables:
   keyVaultName: "PneumOrpheus"
   webAppResourceGroup: "AI-Diagnostics-Norway"
   keyVaultSupabaseUrlSecretName: "NEXT-PUBLIC-SUPABASE-URL"
-  keyVaultSupabaseAnonKeySecretName: "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT-KEY"
+  keyVaultSupabaseAnonKeySecretName: "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT"
   keyVaultInferenceApiKeySecretName: "MODEL-INFERENCE-API-KEY"
   inferenceServerBaseUrl: "https://PneumOrpheus-Server.azurewebsites.net"
 
@@ -98,15 +98,38 @@ stages:
                   exit 1
                 fi
 
+                resolve_secret_value() {
+                  local secret_name
+                  for secret_name in "$@"; do
+                    if [[ -z "$secret_name" ]]; then
+                      continue
+                    fi
+
+                    local secret_value
+                    secret_value=$(az keyvault secret show \
+                      --vault-name "$(keyVaultName)" \
+                      --name "$secret_name" \
+                      --query value -o tsv 2>/dev/null || true)
+
+                    if [[ -n "$secret_value" ]]; then
+                      echo "$secret_value"
+                      return 0
+                    fi
+                  done
+
+                  return 1
+                }
+
                 supabase_url=$(az keyvault secret show \
                   --vault-name "$(keyVaultName)" \
                   --name "$(keyVaultSupabaseUrlSecretName)" \
                   --query value -o tsv)
 
-                supabase_anon_key=$(az keyvault secret show \
-                  --vault-name "$(keyVaultName)" \
-                  --name "$(keyVaultSupabaseAnonKeySecretName)" \
-                  --query value -o tsv)
+                supabase_anon_key=$(resolve_secret_value \
+                  "$(keyVaultSupabaseAnonKeySecretName)" \
+                  "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT" \
+                  "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT-KEY" \
+                  "NEXT-PUBLIC-SUPABASE-ANON-KEY")
 
                 if [[ -z "$supabase_url" || -z "$supabase_anon_key" ]]; then
                   echo "Supabase public environment values could not be resolved from Key Vault."
@@ -183,15 +206,41 @@ stages:
                   exit 1
                 fi
 
+                resolve_secret_id() {
+                  local secret_name
+                  for secret_name in "$@"; do
+                    if [[ -z "$secret_name" ]]; then
+                      continue
+                    fi
+
+                    local secret_id
+                    secret_id=$(az keyvault secret show \
+                      --vault-name "$(keyVaultName)" \
+                      --name "$secret_name" \
+                      --query id -o tsv 2>/dev/null || true)
+
+                    if [[ -n "$secret_id" ]]; then
+                      echo "$secret_id"
+                      return 0
+                    fi
+                  done
+
+                  return 1
+                }
+
                 az keyvault secret show \
                   --vault-name "$(keyVaultName)" \
                   --name "$(keyVaultSupabaseUrlSecretName)" \
                   --query id -o tsv >/dev/null
 
-                az keyvault secret show \
-                  --vault-name "$(keyVaultName)" \
-                  --name "$(keyVaultSupabaseAnonKeySecretName)" \
-                  --query id -o tsv >/dev/null
+                resolve_secret_id \
+                  "$(keyVaultSupabaseAnonKeySecretName)" \
+                  "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT" \
+                  "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT-KEY" \
+                  "NEXT-PUBLIC-SUPABASE-ANON-KEY" >/dev/null || {
+                  echo "Unable to locate a Supabase publishable/anon key secret in Key Vault."
+                  exit 1
+                }
 
                 if [[ -n "$(keyVaultInferenceApiKeySecretName)" ]]; then
                   az keyvault secret show \
@@ -293,15 +342,43 @@ stages:
                   exit 1
                 fi
 
+                resolve_secret_value() {
+                  local secret_name
+                  for secret_name in "$@"; do
+                    if [[ -z "$secret_name" ]]; then
+                      continue
+                    fi
+
+                    local secret_value
+                    secret_value=$(az keyvault secret show \
+                      --vault-name "$(keyVaultName)" \
+                      --name "$secret_name" \
+                      --query value -o tsv 2>/dev/null || true)
+
+                    if [[ -n "$secret_value" ]]; then
+                      echo "$secret_value"
+                      return 0
+                    fi
+                  done
+
+                  return 1
+                }
+
                 supabase_url=$(az keyvault secret show \
                   --vault-name "$(keyVaultName)" \
                   --name "$(keyVaultSupabaseUrlSecretName)" \
                   --query value -o tsv)
 
-                supabase_anon_key=$(az keyvault secret show \
-                  --vault-name "$(keyVaultName)" \
-                  --name "$(keyVaultSupabaseAnonKeySecretName)" \
-                  --query value -o tsv)
+                supabase_anon_key=$(resolve_secret_value \
+                  "$(keyVaultSupabaseAnonKeySecretName)" \
+                  "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT" \
+                  "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT-KEY" \
+                  "NEXT-PUBLIC-SUPABASE-ANON-KEY")
+
+                if [[ -z "$supabase_url" || -z "$supabase_anon_key" ]]; then
+                  echo "Supabase public environment values could not be resolved from Key Vault."
+                  exit 1
+                fi
 
                 az webapp config appsettings set \
                   --resource-group "$(webAppResourceGroup)" \
