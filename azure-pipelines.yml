@@ -18,6 +18,7 @@ variables:
   azureSubscriptionServiceConnection: "prod-pneumorpheus-app"
   acrName: "pneumorpheusacr"
   appServicePlanName: "pneumorpheus-plan"
+  manageRoleAssignments: "false"
 
   keyVaultName: "PneumOrpheus"
   webAppResourceGroup: "AI-Diagnostics-Norway"
@@ -167,6 +168,11 @@ stages:
                   exit 1
                 fi
 
+                if [[ "$(manageRoleAssignments)" != "true" && "$(manageRoleAssignments)" != "false" ]]; then
+                  echo "manageRoleAssignments must be 'true' or 'false'."
+                  exit 1
+                fi
+
                 if [[ -z "$(inferenceServerBaseUrl)" ]]; then
                   echo "inferenceServerBaseUrl is required when webAppName is set."
                   exit 1
@@ -220,7 +226,7 @@ stages:
                     --name "$(webAppName)" \
                     --resource-group "$(webAppResourceGroup)" \
                     --plan "$(appServicePlanName)" \
-                    --deployment-container-image-name "mcr.microsoft.com/azuredocs/aci-helloworld" \
+                    --container-image-name "mcr.microsoft.com/azuredocs/aci-helloworld" \
                     --output none
                 fi
 
@@ -244,12 +250,16 @@ stages:
                   --resource-group "$(webAppResourceGroup)" \
                   --query id -o tsv)
 
-                az role assignment create \
-                  --assignee-object-id "$principal_id" \
-                  --assignee-principal-type ServicePrincipal \
-                  --role AcrPull \
-                  --scope "$acr_id" \
-                  --output none || true
+                if [[ "$(manageRoleAssignments)" == "true" ]]; then
+                  az role assignment create \
+                    --assignee-object-id "$principal_id" \
+                    --assignee-principal-type ServicePrincipal \
+                    --role AcrPull \
+                    --scope "$acr_id" \
+                    --output none || true
+                else
+                  echo "Skipping role assignment management (manageRoleAssignments=false)."
+                fi
 
                 az webapp config set \
                   --resource-group "$(webAppResourceGroup)" \
