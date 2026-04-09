@@ -309,6 +309,7 @@ stages:
                   --settings \
                     NEXT_PUBLIC_SUPABASE_URL="$supabase_url" \
                     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY="$supabase_anon_key" \
+                    NEXT_PUBLIC_SUPABASE_ANON_KEY="$supabase_anon_key" \
                     INFERENCE_API_URL="$inference_api_url" \
                     WEBSITES_PORT="3000" \
                     NODE_ENV="production" \
