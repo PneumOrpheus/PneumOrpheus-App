@@ -71,8 +71,8 @@ const parseVisualization = (value: unknown): VisualizationPayload | null => {
       return {
         sliceIndex: parsed.sliceIndex,
         imageDataUrl: parsed.imageDataUrl,
-        hasMask: typeof parsed.hasMask === "boolean" ? parsed.hasMask : undefined,
-        maskCoverage: typeof parsed.maskCoverage === "number" ? parsed.maskCoverage : undefined,
+        ...(typeof parsed.hasMask === "boolean" && { hasMask: parsed.hasMask }),
+        ...(typeof parsed.maskCoverage === "number" && { maskCoverage: parsed.maskCoverage }),
       };
     })
     .filter((slice): slice is VisualizationSlice => Boolean(slice));
