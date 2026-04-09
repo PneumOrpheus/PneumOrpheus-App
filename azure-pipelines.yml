@@ -15,7 +15,7 @@ pr:
 variables:
   agentPoolName: "PneumOrpheusPool"
   nodeVersion: "20.x"
-  azureSubscriptionServiceConnection: "prod-pneumorpheus-server"
+  azureSubscriptionServiceConnection: "prod-pneumorpheus-app"
   acrName: "pneumorpheusacr"
 
   keyVaultName: "PneumOrpheus"
