@@ -54,7 +54,10 @@ stages:
           - script: npm run lint
             displayName: "Run ESLint"
 
-          - script: npm run build
+          - script: |
+              export NEXT_PUBLIC_SUPABASE_URL="https://example.supabase.co"
+              export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY="placeholder-anon-key"
+              npm run build
             displayName: "Build Next.js app"
 
   - stage: Containerize
@@ -83,10 +86,38 @@ stages:
                   exit 1
                 fi
 
+                if [[ -z "$(keyVaultName)" ]]; then
+                  echo "keyVaultName is required for container build."
+                  exit 1
+                fi
+
+                if [[ -z "$(keyVaultSupabaseUrlSecretName)" || -z "$(keyVaultSupabaseAnonKeySecretName)" ]]; then
+                  echo "Supabase Key Vault secret variable names are required for container build."
+                  exit 1
+                fi
+
+                supabase_url=$(az keyvault secret show \
+                  --vault-name "$(keyVaultName)" \
+                  --name "$(keyVaultSupabaseUrlSecretName)" \
+                  --query value -o tsv)
+
+                supabase_anon_key=$(az keyvault secret show \
+                  --vault-name "$(keyVaultName)" \
+                  --name "$(keyVaultSupabaseAnonKeySecretName)" \
+                  --query value -o tsv)
+
+                if [[ -z "$supabase_url" || -z "$supabase_anon_key" ]]; then
+                  echo "Supabase public environment values could not be resolved from Key Vault."
+                  exit 1
+                fi
+
                 az acr build \
                   --registry "$(acrName)" \
                   --image "$(appImageRepository):$(tag)" \
                   --image "$(appImageRepository):latest" \
+                  --build-arg NEXT_PUBLIC_SUPABASE_URL="$supabase_url" \
+                  --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY="$supabase_anon_key" \
+                  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="$supabase_anon_key" \
                   --file "$(Build.SourcesDirectory)/Dockerfile" \
                   "$(Build.SourcesDirectory)"
 
