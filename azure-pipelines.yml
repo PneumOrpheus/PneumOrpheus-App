@@ -19,7 +19,7 @@ variables:
   acrName: "pneumorpheusacr"
 
   keyVaultName: "PneumOrpheus"
-  webAppResourceGroup: "AI-Diagnostics"
+  webAppResourceGroup: "AI-Diagnostics-Norway"
   keyVaultSupabaseUrlSecretName: "NEXT_PUBLIC_SUPABASE_URL"
   keyVaultSupabaseAnonKeySecretName: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY"
   keyVaultInferenceApiKeySecretName: "MODEL-INFERENCE-API-KEY"
