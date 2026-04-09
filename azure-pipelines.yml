@@ -15,13 +15,15 @@ pr:
 variables:
   agentPoolName: "PneumOrpheusPool"
   nodeVersion: "20.x"
-  azureSubscriptionServiceConnection: "prod-pneumorpheus-server"
+  azureSubscriptionServiceConnection: "prod-pneumorpheus-app"
   acrName: "pneumorpheusacr"
+  appServicePlanName: "pneumorpheus-plan"
+  manageRoleAssignments: "true"
 
   keyVaultName: "PneumOrpheus"
-  webAppResourceGroup: "AI-Diagnostics"
-  keyVaultSupabaseUrlSecretName: "NEXT_PUBLIC_SUPABASE_URL"
-  keyVaultSupabaseAnonKeySecretName: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY"
+  webAppResourceGroup: "AI-Diagnostics-Norway"
+  keyVaultSupabaseUrlSecretName: "NEXT-PUBLIC-SUPABASE-URL"
+  keyVaultSupabaseAnonKeySecretName: "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT"
   keyVaultInferenceApiKeySecretName: "MODEL-INFERENCE-API-KEY"
   inferenceServerBaseUrl: "https://PneumOrpheus-Server.azurewebsites.net"
 
@@ -54,7 +56,10 @@ stages:
           - script: npm run lint
             displayName: "Run ESLint"
 
-          - script: npm run build
+          - script: |
+              export NEXT_PUBLIC_SUPABASE_URL="https://example.supabase.co"
+              export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY="placeholder-anon-key"
+              npm run build
             displayName: "Build Next.js app"
 
   - stage: Containerize
@@ -83,10 +88,61 @@ stages:
                   exit 1
                 fi
 
+                if [[ -z "$(keyVaultName)" ]]; then
+                  echo "keyVaultName is required for container build."
+                  exit 1
+                fi
+
+                if [[ -z "$(keyVaultSupabaseUrlSecretName)" || -z "$(keyVaultSupabaseAnonKeySecretName)" ]]; then
+                  echo "Supabase Key Vault secret variable names are required for container build."
+                  exit 1
+                fi
+
+                resolve_secret_value() {
+                  local secret_name
+                  for secret_name in "$@"; do
+                    if [[ -z "$secret_name" ]]; then
+                      continue
+                    fi
+
+                    local secret_value
+                    secret_value=$(az keyvault secret show \
+                      --vault-name "$(keyVaultName)" \
+                      --name "$secret_name" \
+                      --query value -o tsv 2>/dev/null || true)
+
+                    if [[ -n "$secret_value" ]]; then
+                      echo "$secret_value"
+                      return 0
+                    fi
+                  done
+
+                  return 1
+                }
+
+                supabase_url=$(az keyvault secret show \
+                  --vault-name "$(keyVaultName)" \
+                  --name "$(keyVaultSupabaseUrlSecretName)" \
+                  --query value -o tsv)
+
+                supabase_anon_key=$(resolve_secret_value \
+                  "$(keyVaultSupabaseAnonKeySecretName)" \
+                  "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT" \
+                  "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT-KEY" \
+                  "NEXT-PUBLIC-SUPABASE-ANON-KEY")
+
+                if [[ -z "$supabase_url" || -z "$supabase_anon_key" ]]; then
+                  echo "Supabase public environment values could not be resolved from Key Vault."
+                  exit 1
+                fi
+
                 az acr build \
                   --registry "$(acrName)" \
                   --image "$(appImageRepository):$(tag)" \
                   --image "$(appImageRepository):latest" \
+                  --build-arg NEXT_PUBLIC_SUPABASE_URL="$supabase_url" \
+                  --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY="$supabase_anon_key" \
+                  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="$supabase_anon_key" \
                   --file "$(Build.SourcesDirectory)/Dockerfile" \
                   "$(Build.SourcesDirectory)"
 
@@ -125,6 +181,16 @@ stages:
                   exit 1
                 fi
 
+                if [[ -z "$(appServicePlanName)" ]]; then
+                  echo "appServicePlanName is required when webAppName is set."
+                  exit 1
+                fi
+
+                if [[ "$(manageRoleAssignments)" != "true" && "$(manageRoleAssignments)" != "false" ]]; then
+                  echo "manageRoleAssignments must be 'true' or 'false'."
+                  exit 1
+                fi
+
                 if [[ -z "$(inferenceServerBaseUrl)" ]]; then
                   echo "inferenceServerBaseUrl is required when webAppName is set."
                   exit 1
@@ -135,15 +201,41 @@ stages:
                   exit 1
                 fi
 
+                resolve_secret_id() {
+                  local secret_name
+                  for secret_name in "$@"; do
+                    if [[ -z "$secret_name" ]]; then
+                      continue
+                    fi
+
+                    local secret_id
+                    secret_id=$(az keyvault secret show \
+                      --vault-name "$(keyVaultName)" \
+                      --name "$secret_name" \
+                      --query id -o tsv 2>/dev/null || true)
+
+                    if [[ -n "$secret_id" ]]; then
+                      echo "$secret_id"
+                      return 0
+                    fi
+                  done
+
+                  return 1
+                }
+
                 az keyvault secret show \
                   --vault-name "$(keyVaultName)" \
                   --name "$(keyVaultSupabaseUrlSecretName)" \
                   --query id -o tsv >/dev/null
 
-                az keyvault secret show \
-                  --vault-name "$(keyVaultName)" \
-                  --name "$(keyVaultSupabaseAnonKeySecretName)" \
-                  --query id -o tsv >/dev/null
+                resolve_secret_id \
+                  "$(keyVaultSupabaseAnonKeySecretName)" \
+                  "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT" \
+                  "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT-KEY" \
+                  "NEXT-PUBLIC-SUPABASE-ANON-KEY" >/dev/null || {
+                  echo "Unable to locate a Supabase publishable/anon key secret in Key Vault."
+                  exit 1
+                }
 
                 if [[ -n "$(keyVaultInferenceApiKeySecretName)" ]]; then
                   az keyvault secret show \
@@ -167,6 +259,21 @@ stages:
                 acr_login_server="$(acrName).azurecr.io"
                 image_name="${acr_login_server}/$(appImageRepository):$(tag)"
 
+                if ! az webapp show --name "$(webAppName)" --resource-group "$(webAppResourceGroup)" >/dev/null 2>&1; then
+                  if ! az appservice plan show --name "$(appServicePlanName)" --resource-group "$(webAppResourceGroup)" >/dev/null 2>&1; then
+                    echo "Web App $(webAppName) does not exist and App Service plan $(appServicePlanName) was not found in $(webAppResourceGroup)."
+                    echo "Create the plan first or run server/bootstrap infrastructure pipeline."
+                    exit 1
+                  fi
+
+                  az webapp create \
+                    --name "$(webAppName)" \
+                    --resource-group "$(webAppResourceGroup)" \
+                    --plan "$(appServicePlanName)" \
+                    --container-image-name "mcr.microsoft.com/azuredocs/aci-helloworld" \
+                    --output none
+                fi
+
                 az webapp identity assign \
                   --resource-group "$(webAppResourceGroup)" \
                   --name "$(webAppName)" \
@@ -187,12 +294,16 @@ stages:
                   --resource-group "$(webAppResourceGroup)" \
                   --query id -o tsv)
 
-                az role assignment create \
-                  --assignee-object-id "$principal_id" \
-                  --assignee-principal-type ServicePrincipal \
-                  --role AcrPull \
-                  --scope "$acr_id" \
-                  --output none || true
+                if [[ "$(manageRoleAssignments)" == "true" ]]; then
+                  az role assignment create \
+                    --assignee-object-id "$principal_id" \
+                    --assignee-principal-type ServicePrincipal \
+                    --role AcrPull \
+                    --scope "$acr_id" \
+                    --output none || true
+                else
+                  echo "Skipping role assignment management (manageRoleAssignments=false)."
+                fi
 
                 az webapp config set \
                   --resource-group "$(webAppResourceGroup)" \
@@ -226,15 +337,43 @@ stages:
                   exit 1
                 fi
 
+                resolve_secret_value() {
+                  local secret_name
+                  for secret_name in "$@"; do
+                    if [[ -z "$secret_name" ]]; then
+                      continue
+                    fi
+
+                    local secret_value
+                    secret_value=$(az keyvault secret show \
+                      --vault-name "$(keyVaultName)" \
+                      --name "$secret_name" \
+                      --query value -o tsv 2>/dev/null || true)
+
+                    if [[ -n "$secret_value" ]]; then
+                      echo "$secret_value"
+                      return 0
+                    fi
+                  done
+
+                  return 1
+                }
+
                 supabase_url=$(az keyvault secret show \
                   --vault-name "$(keyVaultName)" \
                   --name "$(keyVaultSupabaseUrlSecretName)" \
                   --query value -o tsv)
 
-                supabase_anon_key=$(az keyvault secret show \
-                  --vault-name "$(keyVaultName)" \
-                  --name "$(keyVaultSupabaseAnonKeySecretName)" \
-                  --query value -o tsv)
+                supabase_anon_key=$(resolve_secret_value \
+                  "$(keyVaultSupabaseAnonKeySecretName)" \
+                  "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT" \
+                  "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT-KEY" \
+                  "NEXT-PUBLIC-SUPABASE-ANON-KEY")
+
+                if [[ -z "$supabase_url" || -z "$supabase_anon_key" ]]; then
+                  echo "Supabase public environment values could not be resolved from Key Vault."
+                  exit 1
+                fi
 
                 az webapp config appsettings set \
                   --resource-group "$(webAppResourceGroup)" \
@@ -242,6 +381,7 @@ stages:
                   --settings \
                     NEXT_PUBLIC_SUPABASE_URL="$supabase_url" \
                     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY="$supabase_anon_key" \
+                    NEXT_PUBLIC_SUPABASE_ANON_KEY="$supabase_anon_key" \
                     INFERENCE_API_URL="$inference_api_url" \
                     WEBSITES_PORT="3000" \
                     NODE_ENV="production" \
