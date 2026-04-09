@@ -20,8 +20,8 @@ variables:
 
   keyVaultName: "PneumOrpheus"
   webAppResourceGroup: "AI-Diagnostics-Norway"
-  keyVaultSupabaseUrlSecretName: "NEXT_PUBLIC_SUPABASE_URL"
-  keyVaultSupabaseAnonKeySecretName: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY"
+  keyVaultSupabaseUrlSecretName: "NEXT-PUBLIC-SUPABASE-URL"
+  keyVaultSupabaseAnonKeySecretName: "NEXT-PUBLIC-SUPABASE-PUBLISHABLE-DEFAULT-KEY"
   keyVaultInferenceApiKeySecretName: "MODEL-INFERENCE-API-KEY"
   inferenceServerBaseUrl: "https://PneumOrpheus-Server.azurewebsites.net"
 
@@ -111,13 +111,18 @@ stages:
                   exit 1
                 fi
 
+                env_file="$(Build.SourcesDirectory)/build.env"
+                trap 'rm -f "$env_file"' EXIT
+                {
+                  echo "NEXT_PUBLIC_SUPABASE_URL=$supabase_url"
+                  echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY=$supabase_anon_key"
+                  echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$supabase_anon_key"
+                } > "$env_file"
+
                 az acr build \
                   --registry "$(acrName)" \
                   --image "$(appImageRepository):$(tag)" \
                   --image "$(appImageRepository):latest" \
-                  --build-arg NEXT_PUBLIC_SUPABASE_URL="$supabase_url" \
-                  --build-arg NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY="$supabase_anon_key" \
-                  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="$supabase_anon_key" \
                   --file "$(Build.SourcesDirectory)/Dockerfile" \
                   "$(Build.SourcesDirectory)"
 
