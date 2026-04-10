@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { AnalysisVisualization } from "@/components/analysis-visualization";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type ClassificationItem = {
   side: string;
@@ -133,18 +135,24 @@ export default async function AnalysisDetailPage({
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
-      <header className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">{new Date(analysis.created_at).toLocaleDateString()}</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Report {analysis.id}</h1>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          {analysis.modality} · {analysis.status}
-        </p>
-      </header>
+      <Card className="rounded-xl border-zinc-200 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <CardHeader>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">{new Date(analysis.created_at).toLocaleDateString()}</p>
+          <CardTitle className="text-2xl tracking-tight">Report {analysis.id}</CardTitle>
+          <p className="mt-1 inline-flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <span>{analysis.modality}</span>
+            <Badge variant="outline">{analysis.status}</Badge>
+          </p>
+        </CardHeader>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <article className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:col-span-1">
-          <h2 className="text-lg font-semibold">Patient Details</h2>
-          <dl className="mt-3 space-y-2 text-sm">
+        <Card className="rounded-xl border-zinc-200 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="text-lg">Patient Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="space-y-2 text-sm">
             <div>
               <dt className="text-zinc-500 dark:text-zinc-400">Name</dt>
               <dd>{patient?.name ?? analysis.patient_name}</dd>
@@ -173,12 +181,16 @@ export default async function AnalysisDetailPage({
               <dt className="text-zinc-500 dark:text-zinc-400">File Type</dt>
               <dd>{analysis.study_file_mime_type ?? "-"}</dd>
             </div>
-          </dl>
-        </article>
+            </dl>
+          </CardContent>
+        </Card>
 
-        <article className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:col-span-2">
-          <h2 className="text-lg font-semibold">Classification Result</h2>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{analysis.findings}</p>
+        <Card className="rounded-xl border-zinc-200 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-lg">Classification Result</CardTitle>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">{analysis.findings}</p>
+          </CardHeader>
+          <CardContent>
 
           {visualization ? (
             <AnalysisVisualization
@@ -190,42 +202,42 @@ export default async function AnalysisDetailPage({
           ) : null}
 
           <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
-            <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 sm:col-span-2">
+            <Card className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700 sm:col-span-2">
               <dt className="text-zinc-500 dark:text-zinc-400">Reasoning</dt>
               <dd className="mt-1">{analysis.reasoning ?? "-"}</dd>
-            </div>
+            </Card>
             {!visualization ? (
               <>
-                <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                <Card className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700">
                   <dt className="text-zinc-500 dark:text-zinc-400">Predicted Cancer Type</dt>
                   <dd className="mt-1 font-medium">{analysis.cancer_type ?? "-"}</dd>
-                </div>
-                <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+                </Card>
+                <Card className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700">
                   <dt className="text-zinc-500 dark:text-zinc-400">Top Confidence</dt>
                   <dd className="mt-1 font-medium">
                     {analysis.classification_confidence !== null
                       ? `${Math.round(analysis.classification_confidence * 100)}%`
                       : "-"}
                   </dd>
-                </div>
-                <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 sm:col-span-2">
+                </Card>
+                <Card className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700 sm:col-span-2">
                   <dt className="text-zinc-500 dark:text-zinc-400">Proposed TNM Stage</dt>
                   <dd className="mt-1 font-medium">{analysis.proposed_tnm_stage ?? "-"}</dd>
-                </div>
+                </Card>
               </>
             ) : null}
           </dl>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {(analysis.classifications ?? []).map((item) => (
-              <div key={item.side} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+              <Card key={item.side} className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700">
                 <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{item.side} Lung</p>
                 <p className="mt-1 font-medium">{item.prediction}</p>
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">
                   Confidence: {Math.round(item.confidence * 100)}%
                 </p>
                 <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{item.explanation}</p>
-              </div>
+              </Card>
             ))}
           </div>
 
@@ -235,7 +247,7 @@ export default async function AnalysisDetailPage({
             </p>
           ) : null}
 
-          <div className="mt-4 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+          <Card className="mt-4 rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700">
             <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Segmentation Data (for visualization)
             </p>
@@ -244,8 +256,9 @@ export default async function AnalysisDetailPage({
                 ? JSON.stringify(analysis.segmentation_data, null, 2)
                 : "No segmentation output available."}
             </pre>
-          </div>
-        </article>
+          </Card>
+          </CardContent>
+        </Card>
       </div>
     </section>
   );

@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/server";
 
 type PatientRow = {
@@ -42,6 +46,14 @@ export default async function PatientsPage() {
   const patients = (patientsResult.data ?? []) as PatientRow[];
   const analyses = (analysesResult.data ?? []) as AnalysisRow[];
 
+  const getStatusVariant = (status: string) => {
+    const normalized = status.toLowerCase();
+    if (normalized.includes("complete")) return "default" as const;
+    if (normalized.includes("fail") || normalized.includes("error")) return "destructive" as const;
+    if (normalized.includes("progress") || normalized.includes("pending")) return "secondary" as const;
+    return "outline" as const;
+  };
+
   return (
     <section className="mx-auto max-w-5xl space-y-6">
       <div className="relative overflow-hidden rounded-2xl border border-brand/20 bg-gradient-to-br from-brand via-third to-fifth p-6 text-white shadow-sm sm:p-8">
@@ -56,7 +68,11 @@ export default async function PatientsPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {patients.map((patient) => {
+        {patients.length === 0 ? (
+          <div className="sm:col-span-2 rounded-xl border border-brand/20 bg-white px-4 py-8 text-center text-sm text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+            No current patients.
+          </div>
+        ) : patients.map((patient) => {
           const latestByReference = patient.recent_analysis_ids?.length
             ? analyses.find((analysis) => analysis.id === patient.recent_analysis_ids[0])
             : undefined;
@@ -64,34 +80,43 @@ export default async function PatientsPage() {
           const latest = latestByReference ?? latestByDate;
 
           return (
-            <article key={patient.id} className="rounded-xl border border-brand/20 bg-white p-5 shadow-sm">
-              <div className="mb-4 space-y-1">
-                <h2 className="text-lg font-semibold">{patient.name}</h2>
-                <p className="text-sm text-zinc-600">
-                  {patient.id} · {patient.sex ?? "Unknown"} · {patient.age ?? "Unknown"}
-                  {patient.age ? " years" : ""}
+            <Card key={patient.id} className="border border-brand/20 ring-0 dark:border-zinc-800">
+              <CardHeader className="space-y-2">
+                <CardTitle className="text-lg">{patient.name}</CardTitle>
+                <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+                  <Badge variant="outline">{patient.id}</Badge>
+                  <Badge variant="secondary">{patient.sex ?? "Unknown"}</Badge>
+                  <Badge variant="outline">
+                    {patient.age ?? "Unknown"}
+                    {patient.age ? " years" : ""}
+                  </Badge>
+                </div>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                  {patient.email}
                 </p>
-                <p className="text-sm text-zinc-600">{patient.email}</p>
-              </div>
+              </CardHeader>
 
-              {latest ? (
+              <CardContent>
+                {latest ? (
                 <div className="space-y-2 text-sm">
-                  <p>
+                  <p className="inline-flex items-center gap-2">
                     Latest report: <strong>{latest.id}</strong>
+                    <Badge variant={getStatusVariant(latest.status)}>{latest.status}</Badge>
                   </p>
-                  <p className="text-zinc-600">
-                    {latest.modality} · {latest.status} · {new Date(latest.created_at).toLocaleDateString()}
+                  <p className="text-zinc-600 dark:text-zinc-400">
+                    {latest.modality} · {new Date(latest.created_at).toLocaleDateString()}
                   </p>
-                  <p className="text-zinc-600">File: {latest.study_file_name ?? "-"}</p>
-                  <p className="text-zinc-600">{latest.findings}</p>
-                  <Link href={`/analysis/${latest.id}`} className="inline-block underline underline-offset-4">
+                  <p className="text-zinc-600 dark:text-zinc-400">File: {latest.study_file_name ?? "-"}</p>
+                  <p className="text-zinc-600 dark:text-zinc-400">{latest.findings}</p>
+                  <Link href={`/analysis/${latest.id}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-1")}>
                     Open report
                   </Link>
                 </div>
               ) : (
-                <p className="text-sm text-zinc-600">No analyses available.</p>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">No analyses available.</p>
               )}
-            </article>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
