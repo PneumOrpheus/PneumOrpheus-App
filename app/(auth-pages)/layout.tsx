@@ -1,26 +1,43 @@
+import AuthFloatingLogo from "@/components/auth-floating-logo";
+import AuthTwoLineTypewriter from "@/components/auth-two-line-typewriter";
+import { Prompt } from "next/font/google";
+
+const prompt = Prompt({
+  subsets: ["latin"],
+  weight: ["500", "600"],
+});
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <section className="grid min-h-[calc(100vh-11rem)] overflow-hidden rounded-2xl border border-brand/20 bg-white shadow-sm lg:grid-cols-2">
+    <section className="grid min-h-[calc(100vh-11rem)] overflow-hidden rounded-2xl border border-brand/20 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:grid-cols-2">
       <div className="relative hidden flex-col justify-between bg-gradient-to-br from-brand via-third to-fifth p-10 text-white lg:flex">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.28),transparent_45%),radial-gradient(circle_at_80%_80%,rgba(77,255,246,0.22),transparent_40%)]" />
-        <div className="relative z-10 space-y-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-fourth/90">
+        <div className="relative z-10 flex min-h-[220px] flex-col items-center justify-center gap-4">
+          <AuthFloatingLogo />
+          <p
+            className={`${prompt.className} text-5xl tracking-wide text-white/95`}
+            aria-label="PneumOrpheus"
+          >
             PneumOrpheus
           </p>
-          <h2 className="max-w-sm text-3xl font-semibold leading-tight tracking-tight">
-            AI-assisted pulmonary diagnostics for clinical cancer workflows.
-          </h2>
         </div>
 
-        <blockquote className="relative z-10 max-w-md text-sm text-white/90">
-          “Designed for faster interpretation, clearer report review, and reliable patient follow-up.”
-        </blockquote>
+        <div className="relative z-10 max-w-md space-y-3">
+          <AuthTwoLineTypewriter
+            line1="AI-assisted pulmonary diagnostics"
+            line2="for clinical cancer workflows."
+            className="text-2xl font-medium text-white/95"
+          />
+          <blockquote className="text-sm text-white/90">
+            “Designed for faster interpretation, clearer report review, and reliable patient follow-up.”
+          </blockquote>
+        </div>
       </div>
 
-      <div className="flex items-center justify-center bg-white p-6 sm:p-10">
+      <div className="flex items-center justify-center bg-white p-6 dark:bg-zinc-950 sm:p-10">
         <div className="w-full max-w-sm">
           {children}
-          <p className="mt-8 text-center text-xs text-zinc-500">
+          <p className="mt-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
             By continuing, you agree to the clinical data handling policy.
           </p>
         </div>
