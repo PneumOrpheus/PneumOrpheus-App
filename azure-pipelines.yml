@@ -2,15 +2,11 @@ trigger:
   branches:
     include:
       - production
-      - main
-      - develop
 
 pr:
   branches:
     include:
       - production
-      - main
-      - develop
 
 variables:
   agentPoolName: "PneumOrpheusPool"
@@ -37,6 +33,7 @@ variables:
 stages:
   - stage: Validate
     displayName: "Validate and Build"
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/production'))
     jobs:
       - job: LintBuild
         displayName: "Lint and Build Next.js"
@@ -65,7 +62,7 @@ stages:
   - stage: Containerize
     displayName: "Build and Push Image"
     dependsOn: Validate
-    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/production'), ne(variables['Build.Reason'], 'PullRequest'))
     jobs:
       - job: BuildPush
         displayName: "Build and push app image"
@@ -149,7 +146,7 @@ stages:
   - stage: Deploy
     displayName: "Deploy to Azure Web App (optional)"
     dependsOn: Containerize
-    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/production'), ne(variables['Build.Reason'], 'PullRequest'))
     jobs:
       - job: DeployContainers
         displayName: "Deploy app container"
