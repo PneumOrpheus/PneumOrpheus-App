@@ -1,20 +1,48 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import { buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 export default function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
-
-  const isDark = resolvedTheme === "dark";
+  const isClient = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false
+  );
+  const isDark = isClient && resolvedTheme === "dark";
 
   return (
-    <button
-      type="button"
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="rounded-md border border-brand/30 px-3 py-1.5 text-sm text-zinc-700 transition hover:bg-brand/10 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100"
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-    >
-      Theme
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            buttonVariants({ variant: "outline", size: "icon-sm" }),
+            "border-brand/30 cursor-pointer data-[state=open]:bg-accent"
+          )}
+        >
+          {isDark ? (
+            <Moon className="h-[1.2rem] w-[1.2rem]" />
+          ) : (
+            <Sun className="h-[1.2rem] w-[1.2rem]" />
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => setTheme("light")}>Light</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("dark")}>Dark</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("system")}>System</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

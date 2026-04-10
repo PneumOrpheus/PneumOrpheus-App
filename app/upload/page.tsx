@@ -3,12 +3,26 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 export default function UploadPage() {
   const router = useRouter();
   const [fileError, setFileError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [modality, setModality] = useState("CT Chest");
 
   const isAllowedFile = (fileName: string, mimeType?: string) => {
     const lower = fileName.trim().toLowerCase();
@@ -35,7 +49,14 @@ export default function UploadPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-brand/20 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <Card className="border border-brand/20 ring-0 dark:border-zinc-800">
+        <CardHeader>
+          <CardTitle>Report Details</CardTitle>
+          <CardDescription>
+            Provide patient metadata and upload a compatible chest study file. All patient information is anonymized, securely stored and handled in accordance with our clinical data policy.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
         <form
           className="grid gap-4 sm:grid-cols-2"
           onSubmit={async (event) => {
@@ -76,49 +97,58 @@ export default function UploadPage() {
             router.refresh();
           }}
         >
-          <label className="grid gap-1 text-sm">
-            Patient ID
-            <input
+          <div className="grid gap-1">
+            <Label htmlFor="patient-id">Patient ID</Label>
+            <Input
+              id="patient-id"
               name="patientId"
-              className="rounded-md border border-sixth bg-transparent px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100"
-              placeholder="P-2004"
+              placeholder="P-2001"
               required
             />
-          </label>
-          <label className="grid gap-1 text-sm">
-            Patient Name
-            <input
+          </div>
+          <div className="grid gap-1">
+            <Label htmlFor="patient-name">Patient Name</Label>
+            <Input
+              id="patient-name"
               name="patientName"
-              className="rounded-md border border-sixth bg-transparent px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100"
               placeholder="John Doe"
               required
             />
-          </label>
-          <label className="grid gap-1 text-sm">
-            Study Modality
-            <select name="modality" className="rounded-md border border-sixth bg-transparent px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100" required>
-              <option value="CT Chest">Chest CT</option>
-              <option value="Chest PET">Chest PET</option>
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm">
-            Clinician Email
-            <input
+          </div>
+          <div className="grid gap-1">
+            <Label htmlFor="modality">Study Modality</Label>
+            <input type="hidden" name="modality" value={modality} />
+            <Select
+              value={modality}
+              onValueChange={(value) => setModality(value ?? "CT Chest")}
+            >
+              <SelectTrigger id="modality" className="h-10 w-full cursor-pointer">
+                <SelectValue placeholder="Select study modality" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CT Chest">Chest CT</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1">
+            <Label htmlFor="clinician-email">Clinician Email</Label>
+            <Input
+              id="clinician-email"
               name="clinicianEmail"
               type="email"
               autoComplete="email"
-              className="rounded-md border border-sixth bg-transparent px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100"
               placeholder="clinician@example.com"
               required
             />
-          </label>
-          <label className="sm:col-span-2 grid gap-1 text-sm">
-            DICOM / NiFTi file
+          </div>
+          <div className="sm:col-span-2 grid gap-1">
+            <Label htmlFor="study-file">DICOM / NiFTi file</Label>
             <input
+              id="study-file"
               name="studyFile"
               type="file"
               accept=".dcm,.dicom,.nii,.nii.gz,.gz,application/dicom,application/gzip,application/x-gzip,application/octet-stream"
-              className="rounded-md border border-dashed border-sixth px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100"
+              className="file:text-foreground rounded-md border border-dashed border-input px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 dark:bg-input/30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:file:bg-muted/30"
               onChange={(event) => {
                 const selectedFile = event.currentTarget.files?.[0];
                 if (!selectedFile) {
@@ -136,32 +166,33 @@ export default function UploadPage() {
               }}
               required
             />
-          </label>
+          </div>
 
           {fileError ? (
-            <p className="sm:col-span-2 rounded-md border border-fifth/40 bg-fifth/10 px-3 py-2 text-sm text-fifth">
+            <p className="sm:col-span-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {fileError}
             </p>
           ) : null}
 
           {submitError ? (
-            <p className="sm:col-span-2 rounded-md border border-fifth/40 bg-fifth/10 px-3 py-2 text-sm text-fifth">
+            <p className="sm:col-span-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {submitError}
             </p>
           ) : null}
 
-          <button
+          <Button
             type="submit"
             disabled={isSubmitting}
-            className="sm:col-span-2 inline-flex items-center justify-center rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-third disabled:cursor-not-allowed disabled:opacity-70"
+            className="sm:col-span-2 h-10 bg-brand text-white hover:bg-third"
           >
             {isSubmitting ? "Submitting..." : "Upload and Create Report"}
-          </button>
+          </Button>
         </form>
-      </div>
+        </CardContent>
+      </Card>
 
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Need historical reports first? Browse <Link href="/analyses" className="underline underline-offset-4">existing analyses</Link>.
+        Need historical reports first? Browse <Link href="/analyses" className={cn(buttonVariants({ variant: "link" }), "h-auto p-0 align-baseline")}>existing analyses</Link>.
       </p>
     </section>
   );

@@ -17,6 +17,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PneumOrpheus App",
   description: "AI-driven pulmonary diagnostic assistant frontend",
+  icons: {
+    icon: "/PneumOrpheus-logo-icon.svg",
+    shortcut: "/PneumOrpheus-logo-icon.svg",
+    apple: "/PneumOrpheus-logo-icon.svg",
+  },
 };
 
 export default function RootLayout({

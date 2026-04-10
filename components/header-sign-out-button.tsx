@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { createClient } from "@/utils/supabase/client";
 
 export default function HeaderSignOutButton() {
@@ -9,8 +10,10 @@ export default function HeaderSignOutButton() {
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      size="sm"
       disabled={isSigningOut}
       onClick={async () => {
         setIsSigningOut(true);
@@ -19,9 +22,9 @@ export default function HeaderSignOutButton() {
         router.push("/sign-in");
         router.refresh();
       }}
-      className="cursor-pointer rounded-md border border-brand/30 px-3 py-1.5 text-zinc-700 transition hover:bg-brand/10 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-70 dark:text-zinc-300 dark:hover:text-zinc-100"
+      className="h-8 cursor-pointer border-brand/30"
     >
       {isSigningOut ? "Signing out..." : "Sign out"}
-    </button>
+    </Button>
   );
 }
