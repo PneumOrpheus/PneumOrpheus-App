@@ -8,11 +8,13 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useLanguage } from "@/components/language-provider";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/client";
 
 export default function SignUpPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const supabase = createClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,11 +25,11 @@ export default function SignUpPage() {
   return (
     <Card className="mx-auto w-full max-w-sm">
       <CardHeader>
-        <CardTitle className="text-2xl tracking-tight">Sign up</CardTitle>
+        <CardTitle className="text-2xl tracking-tight">{t.auth.signUp}</CardTitle>
         <CardDescription>
-          Already have an account?
+          {t.auth.haveAccount}
           <Link href="/sign-in" className={cn(buttonVariants({ variant: "link" }), "ml-1 h-auto p-0 font-medium text-second")}>
-            Sign in
+            {t.auth.signIn}
           </Link>
         </CardDescription>
       </CardHeader>
@@ -41,12 +43,12 @@ export default function SignUpPage() {
             setSuccess("");
 
             if (!email.trim() || !password.trim()) {
-              setError("Email and password are required.");
+              setError(t.auth.requiredError);
               return;
             }
 
             if (password.trim().length < 6) {
-              setError("Password must be at least 6 characters.");
+              setError(t.auth.passwordLengthError);
               return;
             }
 
@@ -72,33 +74,33 @@ export default function SignUpPage() {
               return;
             }
 
-            setSuccess("Thanks for signing up! Check your email to verify your account.");
+            setSuccess(t.auth.signUpSuccess);
             setIsSubmitting(false);
           }}
         >
           <div className="grid gap-1.5">
-            <Label htmlFor="signup-email">Email</Label>
+            <Label htmlFor="signup-email">{t.auth.email}</Label>
             <Input
               id="signup-email"
               type="email"
               autoComplete="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
+              placeholder={t.auth.emailPlaceholder}
               className="h-10"
               required
             />
           </div>
 
           <div className="grid gap-1.5">
-            <Label htmlFor="signup-password">Password</Label>
+            <Label htmlFor="signup-password">{t.auth.password}</Label>
             <Input
               id="signup-password"
               type="password"
               autoComplete="new-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="Create a password"
+              placeholder={t.auth.createPassword}
               className="h-10"
               required
             />
@@ -117,12 +119,12 @@ export default function SignUpPage() {
           ) : null}
 
           <Button type="submit" disabled={isSubmitting} className="h-10 bg-brand text-white hover:bg-third">
-            {isSubmitting ? "Signing up..." : "Sign up"}
+            {isSubmitting ? t.auth.signingUp : t.auth.signUp}
           </Button>
         </form>
 
         <p className="mt-4 text-xs text-muted-foreground">
-          Register a clinician account to upload studies and review AI-assisted pulmonary reports.
+          {t.auth.signUpFooter}
         </p>
       </CardContent>
     </Card>

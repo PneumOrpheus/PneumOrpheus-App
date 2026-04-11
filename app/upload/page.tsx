@@ -15,10 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useLanguage } from "@/components/language-provider";
 import { cn } from "@/lib/utils";
 
 export default function UploadPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [fileError, setFileError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,19 +43,19 @@ export default function UploadPage() {
       <div className="relative overflow-hidden rounded-2xl border border-brand/20 bg-gradient-to-br from-brand via-third to-fifth p-6 text-white shadow-sm sm:p-8">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.28),transparent_45%),radial-gradient(circle_at_80%_80%,rgba(77,255,246,0.22),transparent_40%)]" />
         <div className="relative z-10 space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-fourth/90">New Report</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Create New Analysis</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-fourth/90">{t.upload.sectionLabel}</p>
+          <h1 className="text-3xl font-semibold tracking-tight">{t.upload.title}</h1>
           <p className="text-sm text-white/90">
-            Upload a chest study and register patient metadata to generate a new pulmonary diagnostic report.
+            {t.upload.subtitle}
           </p>
         </div>
       </div>
 
       <Card className="border border-brand/20 ring-0 dark:border-zinc-800">
         <CardHeader>
-          <CardTitle>Report Details</CardTitle>
+          <CardTitle>{t.upload.reportDetails}</CardTitle>
           <CardDescription>
-            Provide patient metadata and upload a compatible chest study file. All patient information is anonymized, securely stored and handled in accordance with our clinical data policy.
+            {t.upload.reportDetailsDesc}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -70,7 +72,7 @@ export default function UploadPage() {
             }
 
             if (!selectedFile || !isAllowedFile(selectedFile.name, selectedFile.type)) {
-              setFileError("Only DICOM (.dcm/.dicom) and NIfTI (.nii/.nii.gz) files are allowed.");
+              setFileError(t.upload.fileTypeError);
               return;
             }
 
@@ -88,7 +90,7 @@ export default function UploadPage() {
             const result = (await response.json()) as { id?: string; error?: string };
 
             if (!response.ok || !result.id) {
-              setSubmitError(result.error ?? "Failed to submit report.");
+              setSubmitError(result.error ?? t.upload.submitError);
               setIsSubmitting(false);
               return;
             }
@@ -98,51 +100,51 @@ export default function UploadPage() {
           }}
         >
           <div className="grid gap-1">
-            <Label htmlFor="patient-id">Patient ID</Label>
+            <Label htmlFor="patient-id">{t.upload.patientId}</Label>
             <Input
               id="patient-id"
               name="patientId"
-              placeholder="P-2001"
+              placeholder={t.upload.patientIdPlaceholder}
               required
             />
           </div>
           <div className="grid gap-1">
-            <Label htmlFor="patient-name">Patient Name</Label>
+            <Label htmlFor="patient-name">{t.upload.patientName}</Label>
             <Input
               id="patient-name"
               name="patientName"
-              placeholder="John Doe"
+              placeholder={t.upload.patientNamePlaceholder}
               required
             />
           </div>
           <div className="grid gap-1">
-            <Label htmlFor="modality">Study Modality</Label>
+            <Label htmlFor="modality">{t.upload.modality}</Label>
             <input type="hidden" name="modality" value={modality} />
             <Select
               value={modality}
               onValueChange={(value) => setModality(value ?? "CT Chest")}
             >
               <SelectTrigger id="modality" className="h-10 w-full cursor-pointer">
-                <SelectValue placeholder="Select study modality" />
+                <SelectValue placeholder={t.upload.selectModality} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="CT Chest">Chest CT</SelectItem>
+                <SelectItem value={t.upload.chestCt}>{t.upload.chestCt}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-1">
-            <Label htmlFor="clinician-email">Clinician Email</Label>
+            <Label htmlFor="clinician-email">{t.upload.clinicianEmail}</Label>
             <Input
               id="clinician-email"
               name="clinicianEmail"
               type="email"
               autoComplete="email"
-              placeholder="clinician@example.com"
+              placeholder={t.upload.clinicianEmailPlaceholder}
               required
             />
           </div>
           <div className="sm:col-span-2 grid gap-1">
-            <Label htmlFor="study-file">DICOM / NiFTi file</Label>
+            <Label htmlFor="study-file">{t.upload.fileLabel}</Label>
             <input
               id="study-file"
               name="studyFile"
@@ -157,7 +159,7 @@ export default function UploadPage() {
                 }
 
                 if (!isAllowedFile(selectedFile.name, selectedFile.type)) {
-                  setFileError("Only DICOM (.dcm/.dicom) and NIfTI (.nii/.nii.gz) files are allowed.");
+                  setFileError(t.upload.fileTypeError);
                   event.currentTarget.value = "";
                   return;
                 }
@@ -185,14 +187,15 @@ export default function UploadPage() {
             disabled={isSubmitting}
             className="sm:col-span-2 h-10 bg-brand text-white hover:bg-third"
           >
-            {isSubmitting ? "Submitting..." : "Upload and Create Report"}
+            {isSubmitting ? t.upload.submitting : t.upload.submit}
           </Button>
         </form>
         </CardContent>
       </Card>
 
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Need historical reports first? Browse <Link href="/analyses" className={cn(buttonVariants({ variant: "link" }), "h-auto p-0 align-baseline")}>existing analyses</Link>.
+        {t.upload.existingAnalysesPrompt}{" "}
+        <Link href="/analyses" className={cn(buttonVariants({ variant: "link" }), "h-auto p-0 align-baseline")}>{t.upload.existingAnalysesLink}</Link>.
       </p>
     </section>
   );

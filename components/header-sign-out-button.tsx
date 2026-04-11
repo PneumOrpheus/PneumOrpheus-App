@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/components/language-provider";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/utils/supabase/client";
 
 export default function HeaderSignOutButton() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   return (
@@ -24,7 +26,7 @@ export default function HeaderSignOutButton() {
       }}
       className="h-8 cursor-pointer border-brand/30"
     >
-      {isSigningOut ? "Signing out..." : "Sign out"}
+      {isSigningOut ? t.common.signingOut : t.common.signOut}
     </Button>
   );
 }
