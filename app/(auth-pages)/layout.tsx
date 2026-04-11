@@ -1,5 +1,6 @@
 import AuthFloatingLogo from "@/components/auth-floating-logo";
 import AuthTwoLineTypewriter from "@/components/auth-two-line-typewriter";
+import { getServerI18n } from "@/lib/server-i18n";
 import { Prompt } from "next/font/google";
 
 const prompt = Prompt({
@@ -7,7 +8,9 @@ const prompt = Prompt({
   weight: ["500", "600"],
 });
 
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+export default async function AuthLayout({ children }: { children: React.ReactNode }) {
+  const { t } = await getServerI18n();
+
   return (
     <section className="grid min-h-[calc(100vh-11rem)] overflow-hidden rounded-2xl border border-brand/20 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:grid-cols-2">
       <div className="relative hidden flex-col justify-between bg-gradient-to-br from-brand via-third to-fifth p-10 text-white lg:flex">
@@ -24,12 +27,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
         <div className="relative z-10 max-w-md space-y-3">
           <AuthTwoLineTypewriter
-            line1="AI-assisted pulmonary diagnostics"
-            line2="for clinical cancer workflows."
+            line1={t.auth.heroLine1}
+            line2={t.auth.heroLine2}
             className="text-2xl font-medium text-white/95"
           />
           <blockquote className="text-sm text-white/90">
-            “Designed for faster interpretation, clearer report review, and reliable patient follow-up.”
+            {t.auth.quote}
           </blockquote>
         </div>
       </div>
@@ -38,7 +41,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="w-full max-w-sm">
           {children}
           <p className="mt-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
-            By continuing, you agree to the clinical data handling policy.
+            {t.auth.policy}
           </p>
         </div>
       </div>

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
+import { getServerI18n } from "@/lib/server-i18n";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/server";
 
 export default async function Home() {
+  const { t } = await getServerI18n();
   const supabase = await createClient();
   const {
     data: { user },
@@ -45,13 +47,13 @@ export default async function Home() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.28),transparent_45%),radial-gradient(circle_at_80%_80%,rgba(77,255,246,0.22),transparent_40%)]" />
         <div className="relative z-10 space-y-4">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-fourth/90">
-            Home
+            {t.home.sectionLabel}
           </p>
           <h1 className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-            AI-assisted pulmonary diagnostics for faster clinical cancer review.
+            {t.home.title}
           </h1>
           <p className="max-w-2xl text-sm text-white/90">
-            Create reports from chest imaging, inspect explainable classifications, and follow patient-level trends in one unified workflow.
+            {t.home.subtitle}
           </p>
         </div>
       </div>
@@ -59,7 +61,7 @@ export default async function Home() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="border border-brand/20 ring-0 dark:border-zinc-800">
           <CardHeader>
-            <CardDescription>Patients</CardDescription>
+            <CardDescription>{t.home.patients}</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold">{patientsCount}</p>
@@ -67,7 +69,7 @@ export default async function Home() {
         </Card>
         <Card className="border border-brand/20 ring-0 dark:border-zinc-800">
           <CardHeader>
-            <CardDescription>Reports</CardDescription>
+            <CardDescription>{t.home.reports}</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold">{reportsCount}</p>
@@ -75,7 +77,7 @@ export default async function Home() {
         </Card>
         <Card className="border border-brand/20 ring-0 dark:border-zinc-800">
           <CardHeader>
-            <CardDescription>Completed</CardDescription>
+            <CardDescription>{t.home.completed}</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold">{completedReports}</p>
@@ -87,9 +89,9 @@ export default async function Home() {
         <Link href="/upload" className="min-w-0 flex-1" aria-label="Start upload">
           <Card className="h-full rounded-2xl border border-brand/20 bg-gradient-to-br from-brand via-third to-fifth p-5 text-white shadow-sm ring-0 transition hover:brightness-105">
             <CardHeader className="px-0">
-              <CardTitle className="text-lg">Create New Report</CardTitle>
+              <CardTitle className="text-lg">{t.home.createReport}</CardTitle>
               <CardDescription className="text-white/90">
-                Start a new diagnostic run by uploading DICOM or NIfTI data.
+                {t.home.createReportDesc}
               </CardDescription>
             </CardHeader>
           </Card>
@@ -98,9 +100,9 @@ export default async function Home() {
         <Link href="/analyses" className="min-w-0 flex-1" aria-label="Browse reports">
           <Card className="h-full rounded-2xl border border-brand/20 bg-gradient-to-br from-brand via-third to-fifth p-5 text-white shadow-sm ring-0 transition hover:brightness-105">
             <CardHeader className="px-0">
-              <CardTitle className="text-lg">Review Analyses</CardTitle>
+              <CardTitle className="text-lg">{t.home.reviewAnalyses}</CardTitle>
               <CardDescription className="text-white/90">
-                Browse generated reports and inspect per-side model outputs.
+                {t.home.reviewAnalysesDesc}
               </CardDescription>
             </CardHeader>
           </Card>
@@ -109,9 +111,9 @@ export default async function Home() {
         <Link href="/patients" className="min-w-0 flex-1" aria-label="Open patients">
           <Card className="h-full rounded-2xl border border-brand/20 bg-gradient-to-br from-brand via-third to-fifth p-5 text-white shadow-sm ring-0 transition hover:brightness-105">
             <CardHeader className="px-0">
-              <CardTitle className="text-lg">Patient Overview</CardTitle>
+              <CardTitle className="text-lg">{t.home.patientOverview}</CardTitle>
               <CardDescription className="text-white/90">
-                Track patients with their recent imaging analyses.
+                {t.home.patientOverviewDesc}
               </CardDescription>
             </CardHeader>
           </Card>
@@ -119,12 +121,12 @@ export default async function Home() {
       </div>
 
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Latest report: {latestReportId ?? "No reports yet"}
+        {t.common.latestReport}: {latestReportId ?? t.common.noReportsYet}
         {latestReportId ? (
           <>
             {" "}
             <Link href="/analyses" className={cn(buttonVariants({ variant: "link" }), "h-auto p-0 align-baseline")}>
-              Open analyses
+              {t.common.openAnalyses}
             </Link>
           </>
         ) : null}

@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getServerI18n } from "@/lib/server-i18n";
 import { createClient } from "@/utils/supabase/server";
 
 type AnalysisRow = {
@@ -21,6 +22,7 @@ type AnalysisRow = {
 };
 
 export default async function AnalysesPage() {
+  const { t } = await getServerI18n();
   const supabase = await createClient();
   const {
     data: { user },
@@ -49,10 +51,10 @@ export default async function AnalysesPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.28),transparent_45%),radial-gradient(circle_at_80%_80%,rgba(77,255,246,0.22),transparent_40%)]" />
         <div className="relative z-10 flex items-end justify-between gap-4">
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-fourth/90">Reports</p>
-            <h1 className="text-3xl font-semibold tracking-tight">Analysis Reports</h1>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-fourth/90">{t.analyses.sectionLabel}</p>
+            <h1 className="text-3xl font-semibold tracking-tight">{t.analyses.title}</h1>
             <p className="text-sm text-white/90">
-              Review completed and in-progress pulmonary diagnostic analyses.
+              {t.analyses.subtitle}
             </p>
           </div>
         </div>
@@ -62,19 +64,19 @@ export default async function AnalysesPage() {
         <Table className="text-zinc-900 dark:text-zinc-100">
           <TableHeader className="bg-brand/10 dark:bg-brand/20">
             <TableRow className="hover:bg-transparent">
-              <TableHead className="px-4 py-3 font-medium">Date</TableHead>
-              <TableHead className="px-4 py-3 font-medium">Patient</TableHead>
-              <TableHead className="px-4 py-3 font-medium">Report</TableHead>
-              <TableHead className="px-4 py-3 font-medium">Modality</TableHead>
-              <TableHead className="px-4 py-3 font-medium">File</TableHead>
-              <TableHead className="px-4 py-3 font-medium">Status</TableHead>
+              <TableHead className="px-4 py-3 font-medium">{t.analyses.date}</TableHead>
+              <TableHead className="px-4 py-3 font-medium">{t.analyses.patient}</TableHead>
+              <TableHead className="px-4 py-3 font-medium">{t.analyses.report}</TableHead>
+              <TableHead className="px-4 py-3 font-medium">{t.analyses.modality}</TableHead>
+              <TableHead className="px-4 py-3 font-medium">{t.analyses.file}</TableHead>
+              <TableHead className="px-4 py-3 font-medium">{t.analyses.status}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {analyses.length === 0 ? (
               <TableRow className="border-brand/10 dark:border-zinc-800">
                 <TableCell colSpan={6} className="px-4 py-8 text-center text-sm text-zinc-600 dark:text-zinc-400">
-                  No current analyses.
+                  {t.analyses.empty}
                 </TableCell>
               </TableRow>
             ) : analyses.map((analysis) => {

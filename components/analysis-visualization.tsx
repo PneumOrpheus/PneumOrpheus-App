@@ -22,6 +22,18 @@ type Props = {
   cancerType: string | null;
   classificationConfidence: number | null;
   proposedTnmStage: string | null;
+  labels: {
+    title: string;
+    sliceSelector: string;
+    slice: string;
+    mask: string;
+    detected: string;
+    none: string;
+    classification: string;
+    subtype: string;
+    confidence: string;
+    proposedTnm: string;
+  };
 };
 
 export function AnalysisVisualization({
@@ -29,6 +41,7 @@ export function AnalysisVisualization({
   cancerType,
   classificationConfidence,
   proposedTnmStage,
+  labels,
 }: Props) {
   const slices = useMemo(() => visualization.slices ?? [], [visualization.slices]);
 
@@ -56,7 +69,7 @@ export function AnalysisVisualization({
 
   return (
     <section className="mt-5 space-y-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
-      <h3 className="text-base font-semibold">Processed Study Visualization</h3>
+      <h3 className="text-base font-semibold">{labels.title}</h3>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
@@ -77,16 +90,16 @@ export function AnalysisVisualization({
               value={currentIndex}
               onChange={(event) => setCurrentIndex(Number(event.target.value))}
               className="w-full"
-              aria-label="Slice selector"
+              aria-label={labels.sliceSelector}
             />
 
             <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
               <span>
-                Slice {currentSlice.sliceIndex}
+                {labels.slice} {currentSlice.sliceIndex}
                 {typeof visualization.totalSlices === "number" ? ` / ${visualization.totalSlices - 1}` : ""}
               </span>
               <span>
-                Mask: {currentSlice.hasMask ? "Detected" : "None"}
+                {labels.mask}: {currentSlice.hasMask ? labels.detected : labels.none}
                 {typeof currentSlice.maskCoverage === "number"
                   ? ` (${Math.round(currentSlice.maskCoverage * 100)}%)`
                   : ""}
@@ -96,14 +109,14 @@ export function AnalysisVisualization({
         </div>
 
         <aside className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-700">
-          <h4 className="text-sm font-semibold">Classification</h4>
+          <h4 className="text-sm font-semibold">{labels.classification}</h4>
           <dl className="mt-2 space-y-3">
             <div>
-              <dt className="text-zinc-500 dark:text-zinc-400">Subtype</dt>
+              <dt className="text-zinc-500 dark:text-zinc-400">{labels.subtype}</dt>
               <dd className="mt-1 font-medium">{cancerType ?? "-"}</dd>
             </div>
             <div>
-              <dt className="text-zinc-500 dark:text-zinc-400">Confidence</dt>
+              <dt className="text-zinc-500 dark:text-zinc-400">{labels.confidence}</dt>
               <dd className="mt-1 font-medium">
                 {classificationConfidence !== null ? `${Math.round(classificationConfidence * 100)}%` : "-"}
               </dd>
@@ -113,7 +126,7 @@ export function AnalysisVisualization({
       </div>
 
       <div className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-700">
-        <p className="text-zinc-500 dark:text-zinc-400">Proposed TNM Stage</p>
+        <p className="text-zinc-500 dark:text-zinc-400">{labels.proposedTnm}</p>
         <p className="mt-1 font-medium">{proposedTnmStage ?? "-"}</p>
       </div>
     </section>

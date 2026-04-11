@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { AnalysisVisualization } from "@/components/analysis-visualization";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getServerI18n } from "@/lib/server-i18n";
 
 type ClassificationItem = {
   side: string;
@@ -102,6 +103,7 @@ export default async function AnalysisDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { t } = await getServerI18n();
   const { id } = await params;
   const supabase = await createClient();
   const {
@@ -138,7 +140,7 @@ export default async function AnalysisDetailPage({
       <Card className="rounded-xl border-zinc-200 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
         <CardHeader>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">{new Date(analysis.created_at).toLocaleDateString()}</p>
-          <CardTitle className="text-2xl tracking-tight">Report {analysis.id}</CardTitle>
+          <CardTitle className="text-2xl tracking-tight">{t.analysisDetail.report} {analysis.id}</CardTitle>
           <p className="mt-1 inline-flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
             <span>{analysis.modality}</span>
             <Badge variant="outline">{analysis.status}</Badge>
@@ -149,37 +151,37 @@ export default async function AnalysisDetailPage({
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="rounded-xl border-zinc-200 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:col-span-1">
           <CardHeader>
-            <CardTitle className="text-lg">Patient Details</CardTitle>
+            <CardTitle className="text-lg">{t.analysisDetail.patientDetails}</CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="space-y-2 text-sm">
             <div>
-              <dt className="text-zinc-500 dark:text-zinc-400">Name</dt>
+              <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.name}</dt>
               <dd>{patient?.name ?? analysis.patient_name}</dd>
             </div>
             <div>
-              <dt className="text-zinc-500 dark:text-zinc-400">Patient ID</dt>
+              <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.patientId}</dt>
               <dd>{analysis.patient_id}</dd>
             </div>
             <div>
-              <dt className="text-zinc-500 dark:text-zinc-400">Email</dt>
-              <dd>{patient?.email ?? "-"}</dd>
+              <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.email}</dt>
+              <dd>{patient?.email ?? t.common.noData}</dd>
             </div>
             <div>
-              <dt className="text-zinc-500 dark:text-zinc-400">Uploaded File</dt>
-              <dd>{analysis.study_file_name ?? "-"}</dd>
+              <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.uploadedFile}</dt>
+              <dd>{analysis.study_file_name ?? t.common.noData}</dd>
             </div>
             <div>
-              <dt className="text-zinc-500 dark:text-zinc-400">File Size</dt>
+              <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.fileSize}</dt>
               <dd>
                 {analysis.study_file_size_bytes
                   ? `${(analysis.study_file_size_bytes / (1024 * 1024)).toFixed(2)} MB`
-                  : "-"}
+                  : t.common.noData}
               </dd>
             </div>
             <div>
-              <dt className="text-zinc-500 dark:text-zinc-400">File Type</dt>
-              <dd>{analysis.study_file_mime_type ?? "-"}</dd>
+              <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.fileType}</dt>
+              <dd>{analysis.study_file_mime_type ?? t.common.noData}</dd>
             </div>
             </dl>
           </CardContent>
@@ -187,7 +189,7 @@ export default async function AnalysisDetailPage({
 
         <Card className="rounded-xl border-zinc-200 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-lg">Classification Result</CardTitle>
+            <CardTitle className="text-lg">{t.analysisDetail.classificationResult}</CardTitle>
             <p className="text-sm text-zinc-600 dark:text-zinc-400">{analysis.findings}</p>
           </CardHeader>
           <CardContent>
@@ -198,31 +200,32 @@ export default async function AnalysisDetailPage({
               cancerType={analysis.cancer_type}
               classificationConfidence={analysis.classification_confidence}
               proposedTnmStage={analysis.proposed_tnm_stage}
+              labels={t.visualization}
             />
           ) : null}
 
           <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
             <Card className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700 sm:col-span-2">
-              <dt className="text-zinc-500 dark:text-zinc-400">Reasoning</dt>
-              <dd className="mt-1">{analysis.reasoning ?? "-"}</dd>
+              <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.reasoning}</dt>
+              <dd className="mt-1">{analysis.reasoning ?? t.common.noData}</dd>
             </Card>
             {!visualization ? (
               <>
                 <Card className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700">
-                  <dt className="text-zinc-500 dark:text-zinc-400">Predicted Cancer Type</dt>
-                  <dd className="mt-1 font-medium">{analysis.cancer_type ?? "-"}</dd>
+                  <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.predictedCancerType}</dt>
+                  <dd className="mt-1 font-medium">{analysis.cancer_type ?? t.common.noData}</dd>
                 </Card>
                 <Card className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700">
-                  <dt className="text-zinc-500 dark:text-zinc-400">Top Confidence</dt>
+                  <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.topConfidence}</dt>
                   <dd className="mt-1 font-medium">
                     {analysis.classification_confidence !== null
                       ? `${Math.round(analysis.classification_confidence * 100)}%`
-                      : "-"}
+                      : t.common.noData}
                   </dd>
                 </Card>
                 <Card className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700 sm:col-span-2">
-                  <dt className="text-zinc-500 dark:text-zinc-400">Proposed TNM Stage</dt>
-                  <dd className="mt-1 font-medium">{analysis.proposed_tnm_stage ?? "-"}</dd>
+                  <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.proposedTnm}</dt>
+                  <dd className="mt-1 font-medium">{analysis.proposed_tnm_stage ?? t.common.noData}</dd>
                 </Card>
               </>
             ) : null}
@@ -231,10 +234,10 @@ export default async function AnalysisDetailPage({
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             {(analysis.classifications ?? []).map((item) => (
               <Card key={item.side} className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700">
-                <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{item.side} Lung</p>
+                <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{item.side} {t.analysisDetail.lungSuffix}</p>
                 <p className="mt-1 font-medium">{item.prediction}</p>
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                  Confidence: {Math.round(item.confidence * 100)}%
+                  {t.analysisDetail.confidence}: {Math.round(item.confidence * 100)}%
                 </p>
                 <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{item.explanation}</p>
               </Card>
@@ -243,18 +246,18 @@ export default async function AnalysisDetailPage({
 
           {(analysis.classifications ?? []).length === 0 ? (
             <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-              No classification output available yet. The report is still being processed.
+              {t.analysisDetail.noClassification}
             </p>
           ) : null}
 
           <Card className="mt-4 rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700">
             <p className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Segmentation Data (for visualization)
+              {t.analysisDetail.segmentationTitle}
             </p>
             <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-zinc-600 dark:text-zinc-300">
               {analysis.segmentation_data
                 ? JSON.stringify(analysis.segmentation_data, null, 2)
-                : "No segmentation output available."}
+                : t.analysisDetail.noSegmentation}
             </pre>
           </Card>
           </CardContent>
