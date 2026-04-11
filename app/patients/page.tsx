@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getServerI18n } from "@/lib/server-i18n";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/server";
 
@@ -25,6 +26,7 @@ type AnalysisRow = {
 };
 
 export default async function PatientsPage() {
+  const { t } = await getServerI18n();
   const supabase = await createClient();
   const {
     data: { user },
@@ -59,10 +61,10 @@ export default async function PatientsPage() {
       <div className="relative overflow-hidden rounded-2xl border border-brand/20 bg-gradient-to-br from-brand via-third to-fifth p-6 text-white shadow-sm sm:p-8">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.28),transparent_45%),radial-gradient(circle_at_80%_80%,rgba(77,255,246,0.22),transparent_40%)]" />
         <div className="relative z-10 space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-fourth/90">Patients</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Your Registered Patients</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-fourth/90">{t.patients.sectionLabel}</p>
+          <h1 className="text-3xl font-semibold tracking-tight">{t.patients.title}</h1>
           <p className="text-sm text-white/90">
-            Overview of registered patients and their latest pulmonary cancer analyses.
+            {t.patients.subtitle}
           </p>
         </div>
       </div>
@@ -70,7 +72,7 @@ export default async function PatientsPage() {
       <div className="grid gap-4 sm:grid-cols-2">
         {patients.length === 0 ? (
           <div className="sm:col-span-2 rounded-xl border border-brand/20 bg-white px-4 py-8 text-center text-sm text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-            No current patients.
+            {t.patients.empty}
           </div>
         ) : patients.map((patient) => {
           const latestByReference = patient.recent_analysis_ids?.length
@@ -85,10 +87,10 @@ export default async function PatientsPage() {
                 <CardTitle className="text-lg">{patient.name}</CardTitle>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
                   <Badge variant="outline">{patient.id}</Badge>
-                  <Badge variant="secondary">{patient.sex ?? "Unknown"}</Badge>
+                  <Badge variant="secondary">{patient.sex ?? t.common.unknown}</Badge>
                   <Badge variant="outline">
-                    {patient.age ?? "Unknown"}
-                    {patient.age ? " years" : ""}
+                    {patient.age ?? t.common.unknown}
+                    {patient.age ? ` ${t.patients.years}` : ""}
                   </Badge>
                 </div>
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -100,20 +102,20 @@ export default async function PatientsPage() {
                 {latest ? (
                 <div className="space-y-2 text-sm">
                   <p className="inline-flex items-center gap-2">
-                    Latest report: <strong>{latest.id}</strong>
+                    {t.patients.latestReport}: <strong>{latest.id}</strong>
                     <Badge variant={getStatusVariant(latest.status)}>{latest.status}</Badge>
                   </p>
                   <p className="text-zinc-600 dark:text-zinc-400">
                     {latest.modality} · {new Date(latest.created_at).toLocaleDateString()}
                   </p>
-                  <p className="text-zinc-600 dark:text-zinc-400">File: {latest.study_file_name ?? "-"}</p>
+                  <p className="text-zinc-600 dark:text-zinc-400">{t.patients.file}: {latest.study_file_name ?? t.common.noData}</p>
                   <p className="text-zinc-600 dark:text-zinc-400">{latest.findings}</p>
                   <Link href={`/analysis/${latest.id}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-1")}>
-                    Open report
+                    {t.patients.openReport}
                   </Link>
                 </div>
               ) : (
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">No analyses available.</p>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">{t.patients.noAnalyses}</p>
               )}
               </CardContent>
             </Card>

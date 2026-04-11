@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useLanguage } from "@/components/language-provider";
 import { buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 
 export default function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
+  const { t } = useLanguage();
   const isClient = useSyncExternalStore(
     () => () => undefined,
     () => true,
@@ -26,6 +28,8 @@ export default function ThemeToggle() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          aria-label={t.theme.toggleLabel}
+          title={t.theme.toggleLabel}
           className={cn(
             buttonVariants({ variant: "outline", size: "icon-sm" }),
             "border-brand/30 cursor-pointer data-[state=open]:bg-accent"
@@ -39,9 +43,9 @@ export default function ThemeToggle() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")}>Light</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>Dark</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>System</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("light")}>{t.theme.light}</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("dark")}>{t.theme.dark}</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("system")}>{t.theme.system}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
