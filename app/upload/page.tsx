@@ -132,17 +132,6 @@ export default function UploadPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid gap-1">
-            <Label htmlFor="clinician-email">{t.upload.clinicianEmail}</Label>
-            <Input
-              id="clinician-email"
-              name="clinicianEmail"
-              type="email"
-              autoComplete="email"
-              placeholder={t.upload.clinicianEmailPlaceholder}
-              required
-            />
-          </div>
           <div className="sm:col-span-2 grid gap-1">
             <Label htmlFor="study-file">{t.upload.fileLabel}</Label>
             <input

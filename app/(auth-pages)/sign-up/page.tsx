@@ -16,6 +16,7 @@ export default function SignUpPage() {
   const router = useRouter();
   const { t } = useLanguage();
   const supabase = createClient();
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -42,8 +43,8 @@ export default function SignUpPage() {
             setError("");
             setSuccess("");
 
-            if (!email.trim() || !password.trim()) {
-              setError(t.auth.requiredError);
+            if (!fullName.trim() || !email.trim() || !password.trim()) {
+              setError(t.auth.signUpRequiredError);
               return;
             }
 
@@ -59,6 +60,10 @@ export default function SignUpPage() {
               password,
               options: {
                 emailRedirectTo: redirectUrl,
+                data: {
+                  full_name: fullName.trim(),
+                  name: fullName.trim(),
+                },
               },
             });
 
@@ -78,6 +83,20 @@ export default function SignUpPage() {
             setIsSubmitting(false);
           }}
         >
+          <div className="grid gap-1.5">
+            <Label htmlFor="signup-name">{t.auth.name}</Label>
+            <Input
+              id="signup-name"
+              type="text"
+              autoComplete="name"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
+              placeholder={t.auth.namePlaceholder}
+              className="h-10"
+              required
+            />
+          </div>
+
           <div className="grid gap-1.5">
             <Label htmlFor="signup-email">{t.auth.email}</Label>
             <Input
