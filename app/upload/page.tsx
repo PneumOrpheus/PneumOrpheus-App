@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +19,18 @@ import {
 import { useLanguage } from "@/components/language-provider";
 import { cn } from "@/lib/utils";
 
+const MAX_BATCH_FILES = 10;
+const MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024;
+
+type BatchItemStatus = "pending" | "processing" | "completed" | "failed";
+
+type BatchItem = {
+  fileName: string;
+  status: BatchItemStatus;
+  analysisId?: string;
+  error?: string;
+};
+
 export default function UploadPage() {
   const router = useRouter();
   const { t } = useLanguage();
@@ -25,6 +38,8 @@ export default function UploadPage() {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modality, setModality] = useState("CT Chest");
+  const [selectedFilesCount, setSelectedFilesCount] = useState(0);
+  const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
 
   const isAllowedFile = (fileName: string, mimeType?: string) => {
     const lower = fileName.trim().toLowerCase();
@@ -37,6 +52,54 @@ export default function UploadPage() {
 
     return validExtension || validMime;
   };
+
+  const updateBatchItem = (index: number, next: Partial<BatchItem>) => {
+    setBatchItems((previous) =>
+      previous.map((item, itemIndex) => {
+        if (itemIndex !== index) {
+          return item;
+        }
+
+        return { ...item, ...next };
+      }),
+    );
+  };
+
+  const getStatusBadgeVariant = (status: BatchItemStatus) => {
+    if (status === "completed") {
+      return "default" as const;
+    }
+
+    if (status === "failed") {
+      return "destructive" as const;
+    }
+
+    if (status === "processing") {
+      return "secondary" as const;
+    }
+
+    return "outline" as const;
+  };
+
+  const getStatusLabel = (status: BatchItemStatus) => {
+    if (status === "completed") {
+      return t.upload.batchStatusCompleted;
+    }
+
+    if (status === "failed") {
+      return t.upload.batchStatusFailed;
+    }
+
+    if (status === "processing") {
+      return t.upload.batchStatusProcessing;
+    }
+
+    return t.upload.batchStatusPending;
+  };
+
+  const completedCount = batchItems.filter((item) => item.status === "completed").length;
+  const failedCount = batchItems.filter((item) => item.status === "failed").length;
+  const processedCount = completedCount + failedCount;
 
   return (
     <section className="mx-auto max-w-4xl space-y-6">
@@ -65,38 +128,117 @@ export default function UploadPage() {
             event.preventDefault();
             const form = event.currentTarget;
             const fileInput = form.elements.namedItem("studyFile") as HTMLInputElement | null;
-            const selectedFile = fileInput?.files?.[0] ?? null;
+            const selectedFiles = Array.from(fileInput?.files ?? []);
 
             if (!form.checkValidity()) {
               return;
             }
 
-            if (!selectedFile || !isAllowedFile(selectedFile.name, selectedFile.type)) {
+            if (!selectedFiles.length) {
+              setFileError(t.upload.batchNoFilesError);
+              return;
+            }
+
+            if (selectedFiles.length > MAX_BATCH_FILES) {
+              setFileError(t.upload.batchTooManyFilesError);
+              return;
+            }
+
+            const invalidFiles = selectedFiles.filter((file) => !isAllowedFile(file.name, file.type));
+            if (invalidFiles.length) {
               setFileError(t.upload.fileTypeError);
               return;
             }
 
-            setFileError("");
-
-            setIsSubmitting(true);
-            setSubmitError("");
-
-            const payload = new FormData(form);
-            const response = await fetch("/api/reports", {
-              method: "POST",
-              body: payload,
-            });
-
-            const result = (await response.json()) as { id?: string; error?: string };
-
-            if (!response.ok || !result.id) {
-              setSubmitError(result.error ?? t.upload.submitError);
-              setIsSubmitting(false);
+            const oversizedFiles = selectedFiles.filter((file) => file.size > MAX_UPLOAD_SIZE_BYTES);
+            if (oversizedFiles.length) {
+              setFileError(t.upload.fileTooLargeError);
               return;
             }
 
-            router.push(`/analysis/${result.id}`);
-            router.refresh();
+            setFileError("");
+            setIsSubmitting(true);
+            setSubmitError("");
+
+            const patientId = (form.elements.namedItem("patientId") as HTMLInputElement | null)?.value.trim() ?? "";
+            const patientName =
+              (form.elements.namedItem("patientName") as HTMLInputElement | null)?.value.trim() ?? "";
+
+            const initialBatchItems = selectedFiles.map((file) => ({
+              fileName: file.name,
+              status: "pending" as const,
+            }));
+            setBatchItems(initialBatchItems);
+
+            let firstSuccessfulAnalysisId: string | null = null;
+            let successfulCount = 0;
+            let failedCountLocal = 0;
+
+            for (const [index, file] of selectedFiles.entries()) {
+              updateBatchItem(index, { status: "processing", error: undefined, analysisId: undefined });
+
+              const payload = new FormData();
+              payload.append("patientId", patientId);
+              payload.append("patientName", patientName);
+              payload.append("modality", modality);
+              payload.append("studyFile", file, file.name);
+
+              try {
+                const response = await fetch("/api/reports", {
+                  method: "POST",
+                  body: payload,
+                });
+
+                const result = (await response.json().catch(() => null)) as {
+                  id?: string;
+                  error?: string;
+                } | null;
+
+                if (!response.ok || !result?.id) {
+                  failedCountLocal += 1;
+                  updateBatchItem(index, {
+                    status: "failed",
+                    error: result?.error ?? t.upload.submitError,
+                  });
+                } else {
+                  if (!firstSuccessfulAnalysisId) {
+                    firstSuccessfulAnalysisId = result.id;
+                  }
+
+                  successfulCount += 1;
+                  updateBatchItem(index, {
+                    status: "completed",
+                    analysisId: result.id,
+                    error: undefined,
+                  });
+                }
+              } catch (error) {
+                failedCountLocal += 1;
+                const message = error instanceof Error ? error.message : t.upload.submitError;
+                updateBatchItem(index, {
+                  status: "failed",
+                  error: message,
+                });
+              } finally {
+                router.refresh();
+              }
+            }
+
+            setIsSubmitting(false);
+
+            if (successfulCount === 0) {
+              setSubmitError(t.upload.batchAllFailedError);
+              return;
+            }
+
+            if (failedCountLocal > 0) {
+              setSubmitError(t.upload.batchPartialFailureError);
+            }
+
+            if (selectedFiles.length === 1 && firstSuccessfulAnalysisId) {
+              router.push(`/analysis/${firstSuccessfulAnalysisId}`);
+              router.refresh();
+            }
           }}
         >
           <div className="grid gap-1">
@@ -128,7 +270,7 @@ export default function UploadPage() {
                 <SelectValue placeholder={t.upload.selectModality} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={t.upload.chestCt}>{t.upload.chestCt}</SelectItem>
+                <SelectItem value="CT Chest">{t.upload.chestCt}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -138,18 +280,40 @@ export default function UploadPage() {
               id="study-file"
               name="studyFile"
               type="file"
+              multiple
               accept=".dcm,.dicom,.nii,.nii.gz,.gz,application/dicom,application/gzip,application/x-gzip,application/octet-stream"
               className="file:text-foreground rounded-md border border-dashed border-input px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 dark:bg-input/30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:file:bg-muted/30"
+              disabled={isSubmitting}
               onChange={(event) => {
-                const selectedFile = event.currentTarget.files?.[0];
-                if (!selectedFile) {
+                const files = Array.from(event.currentTarget.files ?? []);
+                setSelectedFilesCount(files.length);
+                setBatchItems([]);
+
+                if (!files.length) {
                   setFileError("");
                   return;
                 }
 
-                if (!isAllowedFile(selectedFile.name, selectedFile.type)) {
+                if (files.length > MAX_BATCH_FILES) {
+                  setFileError(t.upload.batchTooManyFilesError);
+                  event.currentTarget.value = "";
+                  setSelectedFilesCount(0);
+                  return;
+                }
+
+                const invalidFiles = files.filter((file) => !isAllowedFile(file.name, file.type));
+                if (invalidFiles.length) {
                   setFileError(t.upload.fileTypeError);
                   event.currentTarget.value = "";
+                  setSelectedFilesCount(0);
+                  return;
+                }
+
+                const oversizedFiles = files.filter((file) => file.size > MAX_UPLOAD_SIZE_BYTES);
+                if (oversizedFiles.length) {
+                  setFileError(t.upload.fileTooLargeError);
+                  event.currentTarget.value = "";
+                  setSelectedFilesCount(0);
                   return;
                 }
 
@@ -157,6 +321,10 @@ export default function UploadPage() {
               }}
               required
             />
+            <p className="text-xs text-zinc-600 dark:text-zinc-400">
+              {t.upload.batchLimitHelp}
+              {selectedFilesCount > 0 ? ` ${t.upload.batchSelectedPrefix} ${selectedFilesCount}.` : ""}
+            </p>
           </div>
 
           {fileError ? (
@@ -171,12 +339,42 @@ export default function UploadPage() {
             </p>
           ) : null}
 
+          {batchItems.length > 0 ? (
+            <div className="sm:col-span-2 space-y-3 rounded-md border border-brand/20 bg-brand/5 p-3" aria-live="polite">
+              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                {t.upload.batchProgressTitle} {processedCount}/{batchItems.length}
+              </p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                {t.upload.batchProgressSummary} {completedCount} {t.upload.batchCompletedLabel} / {failedCount} {t.upload.batchFailedLabel}
+              </p>
+              <ul className="space-y-2 text-sm">
+                {batchItems.map((item, index) => (
+                  <li
+                    key={`${item.fileName}-${index}`}
+                    className="rounded border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100">{item.fileName}</span>
+                      <Badge variant={getStatusBadgeVariant(item.status)}>{getStatusLabel(item.status)}</Badge>
+                    </div>
+                    {item.analysisId ? (
+                      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                        <Link href={`/analysis/${item.analysisId}`} className={cn(buttonVariants({ variant: "link" }), "h-auto p-0 text-xs")}>{t.upload.batchOpenAnalysis}</Link>
+                      </p>
+                    ) : null}
+                    {item.error ? <p className="mt-1 text-xs text-destructive">{item.error}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           <Button
             type="submit"
             disabled={isSubmitting}
             className="sm:col-span-2 h-10 bg-brand text-white hover:bg-third"
           >
-            {isSubmitting ? t.upload.submitting : t.upload.submit}
+            {isSubmitting ? t.upload.batchSubmitting : t.upload.submit}
           </Button>
         </form>
         </CardContent>
