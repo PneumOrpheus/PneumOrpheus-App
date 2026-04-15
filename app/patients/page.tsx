@@ -11,7 +11,7 @@ type PatientRow = {
   name: string;
   age: number | null;
   sex: string | null;
-  email: string;
+  clinician_email: string;
   recent_analysis_ids: string[];
 };
 
@@ -35,7 +35,7 @@ export default async function PatientsPage() {
   const [patientsResult, analysesResult] = await Promise.all([
     supabase
       .from("patients")
-      .select("id, name, age, sex, email, recent_analysis_ids")
+      .select("id, name, age, sex, clinician_email, recent_analysis_ids")
       .eq("user_id", user?.id ?? "")
       .order("created_at", { ascending: false }),
     supabase
@@ -94,7 +94,7 @@ export default async function PatientsPage() {
                   </Badge>
                 </div>
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                  {patient.email}
+                  {t.upload.clinicianEmail}: {patient.clinician_email || t.common.noData}
                 </p>
               </CardHeader>
 

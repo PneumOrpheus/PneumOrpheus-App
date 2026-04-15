@@ -95,7 +95,7 @@ const parseVisualization = (value: unknown): VisualizationPayload | null => {
 
 type PatientRow = {
   name: string;
-  email: string;
+  clinician_email: string;
 };
 
 export default async function AnalysisDetailPage({
@@ -127,7 +127,7 @@ export default async function AnalysisDetailPage({
 
   const { data: patientData } = await supabase
     .from("patients")
-    .select("name, email")
+    .select("name, clinician_email")
     .eq("id", analysis.patient_id)
     .eq("user_id", user?.id ?? "")
     .maybeSingle();
@@ -164,8 +164,8 @@ export default async function AnalysisDetailPage({
               <dd>{analysis.patient_id}</dd>
             </div>
             <div>
-              <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.email}</dt>
-              <dd>{patient?.email ?? t.common.noData}</dd>
+              <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.clinicianEmail}</dt>
+              <dd>{patient?.clinician_email ?? t.common.noData}</dd>
             </div>
             <div>
               <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.uploadedFile}</dt>

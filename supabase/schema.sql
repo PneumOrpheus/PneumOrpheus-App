@@ -16,13 +16,21 @@ begin
 end
 $$;
 
+create table if not exists public.clinicians (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null,
+  name text,
+  created_at timestamptz not null default timezone('utc'::text, now()),
+  updated_at timestamptz not null default timezone('utc'::text, now())
+);
+
 create table if not exists public.patients (
   id text primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
+  clinician_email text not null,
   name text not null,
   age integer check (age > 0 and age < 130),
   sex public.patient_sex,
-  email text not null,
   recent_analysis_ids text[] not null default '{}',
   created_at timestamptz not null default timezone('utc'::text, now()),
   updated_at timestamptz not null default timezone('utc'::text, now())
@@ -31,6 +39,7 @@ create table if not exists public.patients (
 create table if not exists public.analyses (
   id text primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
+  clinician_email text not null,
   patient_id text not null references public.patients(id) on delete cascade,
   patient_name text not null,
   created_at timestamptz not null default timezone('utc'::text, now()),
@@ -52,6 +61,9 @@ create table if not exists public.analyses (
 
 alter table public.patients alter column age drop not null;
 alter table public.patients alter column sex drop not null;
+alter table public.clinicians add column if not exists name text;
+alter table public.patients add column if not exists clinician_email text;
+alter table public.analyses add column if not exists clinician_email text;
 alter table public.analyses add column if not exists study_file_path text;
 alter table public.analyses add column if not exists study_file_name text;
 alter table public.analyses add column if not exists study_file_size_bytes bigint;
@@ -62,6 +74,110 @@ alter table public.analyses add column if not exists classification_confidence d
 alter table public.analyses add column if not exists reasoning text;
 alter table public.analyses add column if not exists proposed_tnm_stage text;
 
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'patients'
+      and column_name = 'email'
+  ) then
+    update public.patients as p
+    set clinician_email = coalesce(p.clinician_email, au.email, p.email)
+    from auth.users as au
+    where au.id = p.user_id and p.clinician_email is null;
+  else
+    update public.patients as p
+    set clinician_email = coalesce(p.clinician_email, au.email)
+    from auth.users as au
+    where au.id = p.user_id and p.clinician_email is null;
+  end if;
+end
+$$;
+
+update public.analyses as a
+set clinician_email = coalesce(a.clinician_email, au.email)
+from auth.users as au
+where au.id = a.user_id and a.clinician_email is null;
+
+insert into public.clinicians (id, email)
+select distinct p.user_id, p.clinician_email
+from public.patients as p
+where p.clinician_email is not null
+on conflict (id) do update
+set email = excluded.email;
+
+insert into public.clinicians (id, email)
+select distinct a.user_id, a.clinician_email
+from public.analyses as a
+where a.clinician_email is not null
+on conflict (id) do update
+set email = excluded.email;
+
+update public.clinicians as c
+set name = coalesce(
+  nullif(c.name, ''),
+  nullif(trim(au.raw_user_meta_data ->> 'full_name'), ''),
+  nullif(trim(au.raw_user_meta_data ->> 'name'), ''),
+  split_part(c.email, '@', 1)
+)
+from auth.users as au
+where au.id = c.id
+  and (c.name is null or trim(c.name) = '');
+
+alter table public.patients drop column if exists email;
+
+create unique index if not exists idx_clinicians_email on public.clinicians(email);
+create unique index if not exists idx_clinicians_id_email on public.clinicians(id, email);
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'patients_clinician_fk'
+      and conrelid = 'public.patients'::regclass
+  ) then
+    alter table public.patients
+      add constraint patients_clinician_fk
+      foreign key (user_id, clinician_email)
+      references public.clinicians(id, email)
+      on delete cascade;
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'analyses_clinician_fk'
+      and conrelid = 'public.analyses'::regclass
+  ) then
+    alter table public.analyses
+      add constraint analyses_clinician_fk
+      foreign key (user_id, clinician_email)
+      references public.clinicians(id, email)
+      on delete cascade;
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (select 1 from public.patients where clinician_email is null) then
+    alter table public.patients alter column clinician_email set not null;
+  end if;
+
+  if not exists (select 1 from public.analyses where clinician_email is null) then
+    alter table public.analyses alter column clinician_email set not null;
+  end if;
+end
+$$;
+
+create index if not exists idx_patients_clinician on public.patients(user_id, clinician_email);
 create index if not exists idx_patients_user_id on public.patients(user_id);
 create index if not exists idx_analyses_user_id on public.analyses(user_id);
 create index if not exists idx_analyses_user_id_created_at on public.analyses(user_id, created_at desc);
@@ -77,6 +193,26 @@ begin
 end;
 $$;
 
+drop function if exists public.create_analysis_atomic(
+  text,
+  text,
+  text,
+  public.analysis_modality,
+  text,
+  text,
+  bigint,
+  text,
+  text,
+  public.analysis_status,
+  text,
+  jsonb,
+  jsonb,
+  text,
+  double precision,
+  text,
+  text
+);
+
 create or replace function public.create_analysis_atomic(
   p_analysis_id text,
   p_patient_id text,
@@ -86,7 +222,6 @@ create or replace function public.create_analysis_atomic(
   p_study_file_name text,
   p_study_file_size_bytes bigint,
   p_study_file_mime_type text,
-  p_clinician_email text,
   p_status public.analysis_status default 'In Review',
   p_findings text default 'Report submitted. Processing in progress.',
   p_classifications jsonb default '[]'::jsonb,
@@ -103,32 +238,62 @@ set search_path = public
 as $$
 declare
   current_ids text[];
+  current_clinician_email text;
+  current_clinician_name text;
 begin
   if auth.uid() is null then
     raise exception 'Unauthorized';
   end if;
 
+  current_clinician_email := nullif(auth.jwt() ->> 'email', '');
+
+  if current_clinician_email is null then
+    raise exception 'Clinician email is required in auth context';
+  end if;
+
+  current_clinician_name := coalesce(
+    nullif(trim(auth.jwt() -> 'user_metadata' ->> 'full_name'), ''),
+    nullif(trim(auth.jwt() -> 'user_metadata' ->> 'name'), ''),
+    split_part(current_clinician_email, '@', 1)
+  );
+
+  insert into public.clinicians (
+    id,
+    email,
+    name
+  )
+  values (
+    auth.uid(),
+    current_clinician_email,
+    current_clinician_name
+  )
+  on conflict (id) do update
+    set
+      email = excluded.email,
+      name = coalesce(excluded.name, public.clinicians.name);
+
   insert into public.patients (
     id,
     user_id,
-    name,
-    email
+    clinician_email,
+    name
   )
   values (
     p_patient_id,
     auth.uid(),
-    p_patient_name,
-    p_clinician_email
+    current_clinician_email,
+    p_patient_name
   )
   on conflict (id) do update
     set
       name = excluded.name,
-      email = excluded.email,
-      user_id = excluded.user_id;
+      user_id = excluded.user_id,
+      clinician_email = excluded.clinician_email;
 
   insert into public.analyses (
     id,
     user_id,
+    clinician_email,
     patient_id,
     patient_name,
     modality,
@@ -148,6 +313,7 @@ begin
   values (
     p_analysis_id,
     auth.uid(),
+    current_clinician_email,
     p_patient_id,
     p_patient_name,
     p_modality,
@@ -193,7 +359,6 @@ grant execute on function public.create_analysis_atomic(
   text,
   bigint,
   text,
-  text,
   public.analysis_status,
   text,
   jsonb,
@@ -210,14 +375,46 @@ before update on public.patients
 for each row
 execute procedure public.handle_updated_at();
 
+drop trigger if exists set_clinicians_updated_at on public.clinicians;
+create trigger set_clinicians_updated_at
+before update on public.clinicians
+for each row
+execute procedure public.handle_updated_at();
+
 drop trigger if exists set_analyses_updated_at on public.analyses;
 create trigger set_analyses_updated_at
 before update on public.analyses
 for each row
 execute procedure public.handle_updated_at();
 
+alter table public.clinicians enable row level security;
 alter table public.patients enable row level security;
 alter table public.analyses enable row level security;
+
+drop policy if exists "clinicians_select_own" on public.clinicians;
+create policy "clinicians_select_own"
+on public.clinicians
+for select
+using (auth.uid() = id);
+
+drop policy if exists "clinicians_insert_own" on public.clinicians;
+create policy "clinicians_insert_own"
+on public.clinicians
+for insert
+with check (auth.uid() = id);
+
+drop policy if exists "clinicians_update_own" on public.clinicians;
+create policy "clinicians_update_own"
+on public.clinicians
+for update
+using (auth.uid() = id)
+with check (auth.uid() = id);
+
+drop policy if exists "clinicians_delete_own" on public.clinicians;
+create policy "clinicians_delete_own"
+on public.clinicians
+for delete
+using (auth.uid() = id);
 
 drop policy if exists "patients_select_own" on public.patients;
 create policy "patients_select_own"

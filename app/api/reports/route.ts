@@ -179,11 +179,18 @@ export async function POST(request: Request) {
     const patientId = formData.get("patientId")?.toString().trim() ?? "";
     const patientName = formData.get("patientName")?.toString().trim() ?? "";
     const modality = formData.get("modality")?.toString().trim() ?? "";
-    const clinicianEmail = formData.get("clinicianEmail")?.toString().trim() ?? "";
+    const clinicianEmail = user.email?.trim() ?? "";
     const studyFile = formData.get("studyFile");
 
-    if (!patientId || !patientName || !modality || !clinicianEmail || !(studyFile instanceof File)) {
+    if (!patientId || !patientName || !modality || !(studyFile instanceof File)) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    if (!clinicianEmail) {
+      return NextResponse.json(
+        { error: "Authenticated clinician account must have an email address." },
+        { status: 400 },
+      );
     }
 
     if (!isAllowedFile(studyFile.name, studyFile.type)) {
@@ -259,7 +266,6 @@ export async function POST(request: Request) {
       p_study_file_name: safeFileName,
       p_study_file_size_bytes: studyFile.size,
       p_study_file_mime_type: studyFile.type || null,
-      p_clinician_email: clinicianEmail,
       p_status: normalizedInference.status,
       p_findings: normalizedInference.findings,
       p_classifications: normalizedInference.classifications,
