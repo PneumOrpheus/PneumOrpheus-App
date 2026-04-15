@@ -2,53 +2,76 @@
 -- Run this after applying supabase/schema.sql.
 
 with target_user as (
-  select id
+  select
+    id,
+    email,
+    coalesce(
+      nullif(trim(raw_user_meta_data ->> 'full_name'), ''),
+      nullif(trim(raw_user_meta_data ->> 'name'), ''),
+      split_part(email, '@', 1)
+    ) as name
   from auth.users
   order by created_at asc
   limit 1
 )
-insert into public.patients (id, user_id, name, age, sex, email, recent_analysis_ids)
+insert into public.clinicians (id, email, name)
+select id, email, name
+from target_user
+where id is not null and email is not null
+on conflict (id) do update
+set
+  email = excluded.email,
+  name = excluded.name;
+
+with target_user as (
+  select id, email
+  from auth.users
+  order by created_at asc
+  limit 1
+)
+insert into public.patients (id, user_id, clinician_email, name, age, sex, recent_analysis_ids)
 select *
 from (
   select
     'P-2001'::text,
     (select id from target_user),
+    (select email from target_user),
     'Marina Solberg'::text,
     61,
     'Female'::public.patient_sex,
-    'marina.solberg@example.com'::text,
     array['A-1042']::text[]
   union all
   select
     'P-2002'::text,
     (select id from target_user),
+    (select email from target_user),
     'Erik Vollen'::text,
     67,
     'Male'::public.patient_sex,
-    'erik.vollen@example.com'::text,
     array['A-1043']::text[]
   union all
   select
     'P-2003'::text,
     (select id from target_user),
+    (select email from target_user),
     'Aisha Khan'::text,
     49,
     'Female'::public.patient_sex,
-    'aisha.khan@example.com'::text,
     array['A-1044']::text[]
-) as seed_rows(id, user_id, name, age, sex, email, recent_analysis_ids)
+) as seed_rows(id, user_id, clinician_email, name, age, sex, recent_analysis_ids)
 where (select id from target_user) is not null
+  and (select email from target_user) is not null
 on conflict (id) do update
 set
   user_id = excluded.user_id,
+  clinician_email = excluded.clinician_email,
   name = excluded.name,
   age = excluded.age,
   sex = excluded.sex,
-  email = excluded.email,
   recent_analysis_ids = excluded.recent_analysis_ids;
 
 with target_user as (
-  select id
+  select id, email
   from auth.users
   order by created_at asc
   limit 1
@@ -56,6 +79,7 @@ with target_user as (
 insert into public.analyses (
   id,
   user_id,
+  clinician_email,
   patient_id,
   patient_name,
   created_at,
@@ -69,6 +93,7 @@ from (
   select
     'A-1042'::text,
     (select id from target_user),
+    (select email from target_user),
     'P-2001'::text,
     'Marina Solberg'::text,
     '2026-03-10T09:00:00Z'::timestamptz,
@@ -80,6 +105,7 @@ from (
   select
     'A-1043'::text,
     (select id from target_user),
+    (select email from target_user),
     'P-2002'::text,
     'Erik Vollen'::text,
     '2026-03-12T12:00:00Z'::timestamptz,
@@ -91,6 +117,7 @@ from (
   select
     'A-1044'::text,
     (select id from target_user),
+    (select email from target_user),
     'P-2003'::text,
     'Aisha Khan'::text,
     '2026-03-14T15:30:00Z'::timestamptz,
@@ -101,6 +128,7 @@ from (
 ) as seed_rows(
   id,
   user_id,
+  clinician_email,
   patient_id,
   patient_name,
   created_at,
@@ -110,9 +138,11 @@ from (
   classifications
 )
 where (select id from target_user) is not null
+  and (select email from target_user) is not null
 on conflict (id) do update
 set
   user_id = excluded.user_id,
+  clinician_email = excluded.clinician_email,
   patient_id = excluded.patient_id,
   patient_name = excluded.patient_name,
   created_at = excluded.created_at,

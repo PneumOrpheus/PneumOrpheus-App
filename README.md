@@ -33,7 +33,7 @@ It helps clinicians upload chest imaging studies, generate AI-assisted analysis 
 ## End-to-End Clinical Workflow
 
 1. Clinician signs in and opens New Report.
-2. Study metadata is entered (patient identifier, name, modality, clinician email).
+2. Study metadata is entered (patient identifier, name, modality). Clinician email is applied automatically from the authenticated account.
 3. A supported chest imaging file is uploaded.
 4. The analysis service processes the study and returns structured results.
 5. PneumOrpheus stores the report and links it to the patient profile.
