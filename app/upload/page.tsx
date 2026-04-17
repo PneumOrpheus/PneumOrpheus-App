@@ -2,11 +2,21 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { FileUp, X } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  FileUpload,
+  FileUploadDropzone,
+  FileUploadItem,
+  FileUploadItemDelete,
+  FileUploadItemMetadata,
+  FileUploadItemPreview,
+  FileUploadList,
+} from "@/components/ui/file-upload";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -38,8 +48,24 @@ export default function UploadPage() {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modality, setModality] = useState("CT Chest");
-  const [selectedFilesCount, setSelectedFilesCount] = useState(0);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
+
+  const localizeUploadError = (message: string) => {
+    if (message === "File too large") {
+      return t.upload.fileTooLargeError;
+    }
+
+    if (message === "File type not accepted") {
+      return t.upload.fileTypeError;
+    }
+
+    if (message.startsWith("Maximum") && message.includes("files allowed")) {
+      return t.upload.batchTooManyFilesError;
+    }
+
+    return message;
+  };
 
   const isAllowedFile = (fileName: string, mimeType?: string) => {
     const lower = fileName.trim().toLowerCase();
@@ -127,8 +153,6 @@ export default function UploadPage() {
           onSubmit={async (event) => {
             event.preventDefault();
             const form = event.currentTarget;
-            const fileInput = form.elements.namedItem("studyFile") as HTMLInputElement | null;
-            const selectedFiles = Array.from(fileInput?.files ?? []);
 
             if (!form.checkValidity()) {
               return;
@@ -264,66 +288,88 @@ export default function UploadPage() {
             <input type="hidden" name="modality" value={modality} />
             <Select
               value={modality}
-              onValueChange={(value) => setModality(value ?? "CT Chest")}
+              onValueChange={(value) => setModality(value ?? t.upload.chestCt)}
             >
               <SelectTrigger id="modality" className="h-10 w-full cursor-pointer">
                 <SelectValue placeholder={t.upload.selectModality} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="CT Chest">{t.upload.chestCt}</SelectItem>
+                <SelectItem value={t.upload.chestCt}>{t.upload.chestCt}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="sm:col-span-2 grid gap-1">
             <Label htmlFor="study-file">{t.upload.fileLabel}</Label>
-            <input
-              id="study-file"
+            <FileUpload
+              className="w-full"
               name="studyFile"
-              type="file"
+              value={selectedFiles}
               multiple
+              maxFiles={MAX_BATCH_FILES}
+              maxSize={MAX_UPLOAD_SIZE_BYTES}
               accept=".dcm,.dicom,.nii,.nii.gz,.gz,application/dicom,application/gzip,application/x-gzip,application/octet-stream"
-              className="file:text-foreground rounded-md border border-dashed border-input px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 dark:bg-input/30 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:file:bg-muted/30"
               disabled={isSubmitting}
-              onChange={(event) => {
-                const files = Array.from(event.currentTarget.files ?? []);
-                setSelectedFilesCount(files.length);
+              onFileValidate={(file) => {
+                if (!isAllowedFile(file.name, file.type)) {
+                  return t.upload.fileTypeError;
+                }
+
+                return null;
+              }}
+              onFileReject={(_, message) => {
+                setFileError(localizeUploadError(message));
+              }}
+              onValueChange={(files) => {
+                setSelectedFiles(files);
                 setBatchItems([]);
 
                 if (!files.length) {
-                  setFileError("");
-                  return;
-                }
-
-                if (files.length > MAX_BATCH_FILES) {
-                  setFileError(t.upload.batchTooManyFilesError);
-                  event.currentTarget.value = "";
-                  setSelectedFilesCount(0);
                   return;
                 }
 
                 const invalidFiles = files.filter((file) => !isAllowedFile(file.name, file.type));
                 if (invalidFiles.length) {
                   setFileError(t.upload.fileTypeError);
-                  event.currentTarget.value = "";
-                  setSelectedFilesCount(0);
                   return;
                 }
 
                 const oversizedFiles = files.filter((file) => file.size > MAX_UPLOAD_SIZE_BYTES);
                 if (oversizedFiles.length) {
                   setFileError(t.upload.fileTooLargeError);
-                  event.currentTarget.value = "";
-                  setSelectedFilesCount(0);
                   return;
                 }
 
                 setFileError("");
               }}
-              required
-            />
+            >
+              <FileUploadDropzone
+                id="study-file"
+                className="flex-row gap-3 rounded-md border-input px-4 py-3 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={t.upload.fileLabel}
+              >
+                <FileUp className="size-5 text-muted-foreground" />
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-medium">{t.upload.dropzoneTitle}</p>
+                  <p className="text-xs text-muted-foreground">{t.upload.dropzoneSubtitle}</p>
+                </div>
+              </FileUploadDropzone>
+              <FileUploadList>
+                {selectedFiles.map((file, index) => (
+                  <FileUploadItem key={`${file.name}-${index}`} value={file}>
+                    <FileUploadItemPreview />
+                    <FileUploadItemMetadata />
+                    <FileUploadItemDelete asChild>
+                      <Button variant="ghost" size="icon" className="size-7">
+                        <X className="size-4" />
+                      </Button>
+                    </FileUploadItemDelete>
+                  </FileUploadItem>
+                ))}
+              </FileUploadList>
+            </FileUpload>
             <p className="text-xs text-zinc-600 dark:text-zinc-400">
               {t.upload.batchLimitHelp}
-              {selectedFilesCount > 0 ? ` ${t.upload.batchSelectedPrefix} ${selectedFilesCount}.` : ""}
+              {selectedFiles.length > 0 ? ` ${t.upload.batchSelectedPrefix} ${selectedFiles.length}.` : ""}
             </p>
           </div>
 

@@ -1,5 +1,7 @@
+import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
+import { AnalysisEditableFieldsForm } from "@/components/analysis-editable-fields-form";
 import { AnalysisVisualization } from "@/components/analysis-visualization";
 import { NiftiStorageVisualization } from "@/components/nifti-storage-visualization";
 import {
@@ -10,7 +12,7 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { resolveLocalizedText, type LocalizedTextMap } from "@/lib/analysis-localization";
+import { parseLocalizedText, resolveLocalizedText, type LocalizedTextMap } from "@/lib/analysis-localization";
 import { getServerI18n } from "@/lib/server-i18n";
 
 type LocalizedTextValue = string | LocalizedTextMap;
@@ -160,6 +162,49 @@ type PatientRow = {
   clinician_email: string;
 };
 
+const isCompletedStatus = (status: string | null | undefined) => {
+  const normalized = (status ?? "").trim().toLowerCase();
+  return normalized.includes("complete") || normalized.includes("fullfort") || normalized.includes("fullført");
+};
+
+const COMPLETED_STATUS_VALUE = "Completed";
+const IN_REVIEW_STATUS_VALUE = "In Review";
+
+const normalizeEditableInput = (value: FormDataEntryValue | null): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+};
+
+const getLocalizedValue = (value: unknown, language: "en" | "no"): string | null => {
+  const parsed = parseLocalizedText(value);
+  if (!parsed) {
+    return null;
+  }
+
+  return language === "no" ? (parsed.no ?? parsed.en ?? null) : (parsed.en ?? parsed.no ?? null);
+};
+
+const toStoredLocalizedUpdate = (
+  baseValue: unknown,
+  nextValue: string | null,
+  language: "en" | "no",
+  allowNull: boolean,
+): string | null => {
+  if (nextValue === null) {
+    return allowNull ? null : (JSON.stringify(parseLocalizedText(baseValue) ?? { en: "", no: "" }));
+  }
+
+  const parsed = parseLocalizedText(baseValue);
+  const english = language === "en" ? nextValue : (parsed?.en ?? parsed?.no ?? nextValue);
+  const norwegian = language === "no" ? nextValue : (parsed?.no ?? parsed?.en ?? nextValue);
+
+  return JSON.stringify({ en: english, no: norwegian });
+};
+
 export default async function AnalysisDetailPage({
   params,
 }: {
@@ -195,12 +240,182 @@ export default async function AnalysisDetailPage({
     .maybeSingle();
 
   const patient = patientData as PatientRow | null;
-  const localizedFindings = resolveLocalizedText(analysis.findings, language) ?? t.common.noData;
-  const localizedReasoning = resolveLocalizedText(analysis.reasoning, language) ?? t.common.noData;
-  const localizedCancerType = resolveLocalizedText(analysis.cancer_type, language);
-  const localizedProposedTnmStage = resolveLocalizedText(analysis.proposed_tnm_stage, language);
+  const editableFindingsValue = resolveLocalizedText(analysis.findings, language) ?? "";
+  const editableReasoningValue = resolveLocalizedText(analysis.reasoning, language) ?? "";
+  const editableCancerTypeValue = resolveLocalizedText(analysis.cancer_type, language) ?? "";
+  const editableProposedTnmStageValue = resolveLocalizedText(analysis.proposed_tnm_stage, language) ?? "";
+  const localizedFindings = editableFindingsValue || t.common.noData;
+  const createdAtLocale = language === "no" ? "nb-NO" : "en-US";
+
+  const localizeModality = (modality: string) => {
+    const normalized = modality.trim().toLowerCase();
+
+    if (normalized === "ct chest" || normalized === "thorax ct") {
+      return t.upload.chestCt;
+    }
+
+    if (normalized === "chest pet") {
+      return language === "no" ? "Thorax PET" : "Chest PET";
+    }
+
+    if (normalized === "thorax pet") {
+      return language === "en" ? "Chest PET" : "Thorax PET";
+    }
+
+    return modality;
+  };
+
+  const localizeStatus = (status: string) => {
+    const normalized = status.trim().toLowerCase();
+
+    if (isCompletedStatus(status)) {
+      return t.analysisDetail.statusCompleted;
+    }
+
+    if (normalized.includes("review") || normalized.includes("vurdering")) {
+      return t.analysisDetail.statusInReview;
+    }
+
+    if (
+      normalized.includes("process") ||
+      normalized.includes("progress") ||
+      normalized.includes("pending") ||
+      normalized.includes("behandles") ||
+      normalized.includes("venter")
+    ) {
+      return t.analysisDetail.statusProcessing;
+    }
+
+    if (normalized.includes("fail") || normalized.includes("error") || normalized.includes("feil") || normalized.includes("feilet")) {
+      return t.analysisDetail.statusFailed;
+    }
+
+    return status;
+  };
+
+  const localizedCreatedAt = new Date(analysis.created_at).toLocaleDateString(createdAtLocale);
+  const localizedModality = localizeModality(analysis.modality);
+  const localizedStatus = localizeStatus(analysis.status);
+  const shouldSetInReview = isCompletedStatus(analysis.status);
+  const statusToggleButtonLabel = shouldSetInReview
+    ? t.analysisDetail.setAsInReview
+    : t.analysisDetail.setAsCompleted;
   const visualization = parseVisualization(analysis.visualization_data);
   let signedPlotFileUrl: string | null = null;
+
+  const toggleStatusAction = async () => {
+    "use server";
+
+    const actionSupabase = await createClient();
+    const {
+      data: { user: actionUser },
+    } = await actionSupabase.auth.getUser();
+
+    if (!actionUser) {
+      return;
+    }
+
+    const { data: currentAnalysis } = await actionSupabase
+      .from("analyses")
+      .select("status")
+      .eq("id", id)
+      .eq("user_id", actionUser.id)
+      .maybeSingle();
+
+    if (!currentAnalysis) {
+      return;
+    }
+
+    const nextStatus = isCompletedStatus(currentAnalysis.status)
+      ? IN_REVIEW_STATUS_VALUE
+      : COMPLETED_STATUS_VALUE;
+
+    await actionSupabase
+      .from("analyses")
+      .update({ status: nextStatus })
+      .eq("id", id)
+      .eq("user_id", actionUser.id);
+
+    revalidatePath(`/analysis/${id}`);
+    revalidatePath("/analyses");
+    revalidatePath("/patients");
+  };
+
+  const saveClinicalFieldsAction = async (formData: FormData) => {
+    "use server";
+
+    const actionSupabase = await createClient();
+    const {
+      data: { user: actionUser },
+    } = await actionSupabase.auth.getUser();
+
+    if (!actionUser) {
+      return;
+    }
+
+    const { data: currentAnalysis } = await actionSupabase
+      .from("analyses")
+      .select("findings, reasoning, cancer_type, proposed_tnm_stage")
+      .eq("id", id)
+      .eq("user_id", actionUser.id)
+      .maybeSingle();
+
+    if (!currentAnalysis) {
+      return;
+    }
+
+    const findingsInput = normalizeEditableInput(formData.get("findings"));
+    if (!findingsInput) {
+      return;
+    }
+
+    const reasoningInput = normalizeEditableInput(formData.get("reasoning"));
+    const cancerTypeInput = normalizeEditableInput(formData.get("cancerType"));
+    const proposedTnmStageInput = normalizeEditableInput(formData.get("proposedTnmStage"));
+
+    const currentFindings = getLocalizedValue(currentAnalysis.findings, language) ?? "";
+    const currentReasoning = getLocalizedValue(currentAnalysis.reasoning, language) ?? "";
+    const currentCancerType = getLocalizedValue(currentAnalysis.cancer_type, language) ?? "";
+    const currentProposedTnmStage = getLocalizedValue(currentAnalysis.proposed_tnm_stage, language) ?? "";
+
+    const findingsChanged = findingsInput !== currentFindings;
+    const reasoningChanged = (reasoningInput ?? "") !== currentReasoning;
+    const cancerTypeChanged = (cancerTypeInput ?? "") !== currentCancerType;
+    const proposedTnmStageChanged = (proposedTnmStageInput ?? "") !== currentProposedTnmStage;
+    const anyFieldChanged = findingsChanged || reasoningChanged || cancerTypeChanged || proposedTnmStageChanged;
+
+    const findingsToStore = toStoredLocalizedUpdate(currentAnalysis.findings, findingsInput, language, false);
+    if (!findingsToStore) {
+      return;
+    }
+
+    const updatePayload: {
+      findings: string;
+      reasoning: string | null;
+      cancer_type: string | null;
+      proposed_tnm_stage: string | null;
+      classification_confidence?: number;
+    } = {
+      findings: findingsToStore,
+      reasoning: toStoredLocalizedUpdate(currentAnalysis.reasoning, reasoningInput, language, true),
+      cancer_type: toStoredLocalizedUpdate(currentAnalysis.cancer_type, cancerTypeInput, language, true),
+      proposed_tnm_stage: toStoredLocalizedUpdate(currentAnalysis.proposed_tnm_stage, proposedTnmStageInput, language, true),
+    };
+
+    if (anyFieldChanged) {
+      updatePayload.classification_confidence = -1;
+    }
+
+    await actionSupabase
+      .from("analyses")
+      .update(updatePayload)
+      .eq("id", id)
+      .eq("user_id", actionUser.id);
+
+    revalidatePath(`/analysis/${id}`);
+    revalidatePath("/analyses");
+    revalidatePath("/patients");
+  };
 
   if (!visualization && analysis.plot_file_path) {
     const location = parsePlotStorageLocation(analysis.plot_file_path);
@@ -214,12 +429,12 @@ export default async function AnalysisDetailPage({
     <section className="mx-auto max-w-5xl space-y-6">
       <Card className="relative overflow-hidden rounded-2xl border border-brand/20 bg-gradient-to-br from-brand via-third to-fifth text-white shadow-sm">
         <CardHeader>
-          <p className="text-sm text-white/80">{new Date(analysis.created_at).toLocaleDateString()}</p>
+          <p className="text-sm text-white/80">{localizedCreatedAt}</p>
           <CardTitle className="text-2xl tracking-tight">{t.analysisDetail.report} {analysis.id}</CardTitle>
           <p className="mt-1 inline-flex items-center gap-2 text-sm text-white/80">
-            <span>{analysis.modality}</span>
+            <span>{localizedModality}</span>
             <Badge variant="outline" className="border-white/50 bg-white/10 text-white">
-              {analysis.status}
+              {localizedStatus}
             </Badge>
           </p>
         </CardHeader>
@@ -229,31 +444,30 @@ export default async function AnalysisDetailPage({
         <Card className="rounded-xl border-zinc-200 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
           <CardHeader>
             <CardTitle className="text-lg">{t.analysisDetail.classificationResult}</CardTitle>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">{localizedFindings}</p>
           </CardHeader>
           <CardContent>
-            <dl className="grid gap-3 sm:grid-cols-2 text-sm">
-              <Card className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700 sm:col-span-2">
-                <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.reasoning}</dt>
-                <dd className="mt-1">{localizedReasoning}</dd>
-              </Card>
-              <Card className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700">
-                <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.predictedCancerType}</dt>
-                <dd className="mt-1 font-medium">{localizedCancerType ?? t.common.noData}</dd>
-              </Card>
-              <Card className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700">
-                <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.topConfidence}</dt>
-                <dd className="mt-1 font-medium">
-                  {analysis.classification_confidence !== null
-                    ? `${Math.round(analysis.classification_confidence * 100)}%`
-                    : t.common.noData}
-                </dd>
-              </Card>
-              <Card className="rounded-lg border-zinc-200 p-3 ring-0 dark:border-zinc-700 sm:col-span-2">
-                <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.proposedTnm}</dt>
-                <dd className="mt-1 font-medium">{localizedProposedTnmStage ?? t.common.noData}</dd>
-              </Card>
-            </dl>
+            <AnalysisEditableFieldsForm
+              key={`${id}-${language}`}
+              initialFindings={editableFindingsValue}
+              initialReasoning={editableReasoningValue}
+              initialCancerType={editableCancerTypeValue}
+              initialProposedTnmStage={editableProposedTnmStageValue}
+              classificationConfidence={analysis.classification_confidence}
+              noDataLabel={t.common.noData}
+              statusToggleButtonLabel={statusToggleButtonLabel}
+              saveClinicalFieldsAction={saveClinicalFieldsAction}
+              toggleStatusAction={toggleStatusAction}
+              labels={{
+                findings: t.analysisDetail.findings,
+                reasoning: t.analysisDetail.reasoning,
+                predictedCancerType: t.analysisDetail.predictedCancerType,
+                topConfidence: t.analysisDetail.topConfidence,
+                proposedTnm: t.analysisDetail.proposedTnm,
+                confidenceAltered: t.analysisDetail.confidenceAltered,
+                editField: t.analysisDetail.editField,
+                saveClinicalUpdates: t.analysisDetail.saveClinicalUpdates,
+              }}
+            />
 
             {visualization ? (
               <AnalysisVisualization
@@ -269,10 +483,10 @@ export default async function AnalysisDetailPage({
             ) : null}
 
             <div className="mt-4 space-y-2">
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">More information:</p>
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t.analysisDetail.moreInformation}</p>
               <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="meta" className="rounded-lg border border-zinc-200 px-3 dark:border-zinc-700">
-                  <AccordionTrigger className="hover:no-underline">{t.analysisDetail.patientDetails}</AccordionTrigger>
+                  <AccordionTrigger className="hover:no-underline cursor-pointer">{t.analysisDetail.patientDetails}</AccordionTrigger>
                   <AccordionContent>
                     <dl className="grid gap-3 text-sm sm:grid-cols-2 py-4">
                       <div>

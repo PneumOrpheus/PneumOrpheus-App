@@ -541,7 +541,7 @@ export function NiftiStorageVisualization({
             max={Math.max(0, volume.depth - 1)}
             value={currentSliceIndex}
             onChange={(event) => setCurrentSliceIndex(Number(event.target.value))}
-            className="h-8 w-full cursor-pointer accent-zinc-900 dark:accent-zinc-100"
+            className="viz-range h-8 w-full cursor-pointer"
             aria-label={labels.sliceSelector}
           />
 

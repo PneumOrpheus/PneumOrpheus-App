@@ -61,12 +61,12 @@ export default async function AnalysesPage() {
 
   const localizeStatus = (status: string) => {
     if (language === "no") {
-      if (status === "Completed") return "Fullfort";
+      if (status === "Completed") return "Fullført";
       if (status === "In Review") return "Til vurdering";
     }
 
     if (language === "en") {
-      if (status === "Fullfort") return "Completed";
+      if (status === "Fullført") return "Completed";
       if (status === "Til vurdering") return "In Review";
     }
 
