@@ -15,7 +15,11 @@ This folder contains the minimal FastAPI model-server stub that matches the uplo
 
 Returns JSON including:
 
-- `segmentationData`
+- `plotFilePath`
+- `plotFileName`
+- `plotFileSizeBytes`
+- `plotFileMimeType`
+- `visualizationData`
 - `cancerType`
 - `classificationConfidence`
 - `reasoning`
@@ -26,6 +30,16 @@ Returns JSON including:
 Status endpoint:
 
 - `GET /cancer`
+
+## Stub Behavior
+
+The FastAPI stub returns deterministic mock inference derived from uploaded file bytes.
+
+- It does **not** use file extension (`.nii`, `.dcm`, etc.) to decide cancer type.
+- It does **not** perform real medical inference.
+- EN/NO localized fields are generated from the same selected mock result so they stay consistent.
+
+This is intended for integration testing only. Replace with a real model service for production use.
 
 ## Python (FastAPI)
 

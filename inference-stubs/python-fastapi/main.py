@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from pathlib import Path
+import hashlib
 from typing import Any
 
 from fastapi import FastAPI, File, Form, UploadFile
@@ -9,6 +9,58 @@ from fastapi.responses import JSONResponse
 
 
 app = FastAPI(title="PneumOrpheus Inference Stub", version="0.1.0")
+
+
+MOCK_CANCER_TYPES = [
+    {
+        "en": "Adenocarcinoma",
+        "no": "Adenokarsinom",
+        "tnm": "T1N0M0",
+    },
+    {
+        "en": "Small Cell Carcinoma",
+        "no": "Smaacellet karsinom",
+        "tnm": "T2N1M0",
+    },
+    {
+        "en": "Squamous Cell Carcinoma",
+        "no": "Plateepitelkarsinom",
+        "tnm": "T2N0M0",
+    },
+]
+
+
+def build_mock_inference_from_bytes(file_bytes: bytes) -> dict[str, Any]:
+    if not file_bytes:
+        return {
+            "cancerTypeEn": "Unknown",
+            "cancerTypeNo": "Ukjent",
+            "classificationConfidence": 0.0,
+            "proposedTnm": "TXNXMX",
+            "leftConfidence": 0.0,
+            "rightConfidence": 0.0,
+            "seed": "00" * 32,
+        }
+
+    digest = hashlib.sha256(file_bytes).hexdigest()
+    cancer_index = int(digest[:2], 16) % len(MOCK_CANCER_TYPES)
+    selected = MOCK_CANCER_TYPES[cancer_index]
+
+    base_confidence = 0.72 + (int(digest[2:4], 16) / 255.0) * 0.23
+    base_confidence = max(0.0, min(1.0, round(base_confidence, 2)))
+
+    right_delta = 0.01 + (int(digest[4:6], 16) / 255.0) * 0.04
+    right_confidence = max(0.0, min(1.0, round(base_confidence - right_delta, 2)))
+
+    return {
+        "cancerTypeEn": selected["en"],
+        "cancerTypeNo": selected["no"],
+        "classificationConfidence": base_confidence,
+        "proposedTnm": selected["tnm"],
+        "leftConfidence": base_confidence,
+        "rightConfidence": right_confidence,
+        "seed": digest,
+    }
 
 
 @app.get("/cancer")
@@ -27,12 +79,15 @@ async def infer(
 ) -> JSONResponse:
     file_bytes = await studyFile.read()
     file_name = studyFile.filename or "study-file"
-    suffix = "".join(Path(file_name).suffixes).lower()
-    is_nifti = suffix in {".nii", ".nii.gz"}
-
-    predicted_type = "Small Cell Carcinoma" if is_nifti else "Adenocarcinoma"
-    confidence = 0.89 if is_nifti else 0.86
-    proposed_tnm = "T2N1M0" if is_nifti else "T1N0M0"
+    mock = build_mock_inference_from_bytes(file_bytes)
+    predicted_type = mock["cancerTypeEn"]
+    predicted_type_no = mock["cancerTypeNo"]
+    confidence = mock["classificationConfidence"]
+    proposed_tnm = mock["proposedTnm"]
+    left_confidence = mock["leftConfidence"]
+    right_confidence = mock["rightConfidence"]
+    plot_file_name = f"{analysisId}_plot.nii.gz"
+    base_slice = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
 
     response: dict[str, Any] = {
         "analysisId": analysisId,
@@ -46,49 +101,82 @@ async def infer(
             "mimeType": studyFile.content_type or "application/octet-stream",
             "sizeBytes": len(file_bytes),
         },
-        "findings": (
-            f"Model predicts {predicted_type} with {round(confidence * 100)}% confidence "
-            "based on lesion morphology and density patterns in the uploaded study."
-        ),
-        "cancerType": predicted_type,
-        "classificationConfidence": confidence,
-        "reasoning": (
-            "Detected malignant-appearing lesion distribution, margin irregularity, and intensity profile "
-            "compatible with the predicted subtype."
-        ),
-        "proposedTnmStage": proposed_tnm,
-        "classifications": [
-            {
-                "side": "Left",
-                "prediction": predicted_type,
-                "confidence": confidence,
-                "explanation": "Primary left-side lesion demonstrates dominant malignant signature.",
-            },
-            {
-                "side": "Right",
-                "prediction": predicted_type,
-                "confidence": max(0.0, min(1.0, confidence - 0.03)),
-                "explanation": "Secondary right-side suspicious region with supporting radiographic traits.",
-            },
-        ],
-        "segmentationData": {
-            "format": "polygon",
-            "labels": ["tumor", "nodule"],
-            "regions": [
+        "stubMetadata": {
+            "inferenceMode": "content_hash_mock",
+            "seed": mock["seed"],
+        },
+        "plotFilePath": f"manual-upload://{analysisId}/{plot_file_name}",
+        "plotFileName": plot_file_name,
+        "plotFileSizeBytes": len(file_bytes),
+        "plotFileMimeType": "application/gzip",
+        "visualizationData": {
+            "imageFormat": "png",
+            "totalSlices": 3,
+            "defaultSliceIndex": 1,
+            "slices": [
                 {
-                    "id": "region-1",
-                    "label": "tumor",
-                    "sliceIndex": 42,
-                    "points": [[120, 88], [158, 92], [162, 133], [124, 130]],
+                    "sliceIndex": 0,
+                    "imageDataUrl": base_slice,
+                    "hasOverlay": False,
+                    "overlayCoverage": 0.0,
                 },
                 {
-                    "id": "region-2",
-                    "label": "nodule",
-                    "sliceIndex": 47,
-                    "points": [[210, 160], [228, 164], [232, 184], [214, 182]],
+                    "sliceIndex": 1,
+                    "imageDataUrl": base_slice,
+                    "hasOverlay": True,
+                    "overlayCoverage": round(left_confidence * 0.5, 2),
+                },
+                {
+                    "sliceIndex": 2,
+                    "imageDataUrl": base_slice,
+                    "hasOverlay": True,
+                    "overlayCoverage": round(right_confidence * 0.5, 2),
                 },
             ],
         },
+        "findings": {
+            "en": (
+                f"Model predicts {predicted_type} with {round(confidence * 100)}% confidence "
+                "from deterministic mock inference based on uploaded study content."
+            ),
+            "no": (
+                f"Modellen predikerer {predicted_type_no} med {round(confidence * 100)}% sannsynlighet "
+                "fra deterministisk mock-inferens basert pa innholdet i opplastet studie."
+            ),
+        },
+        "cancerType": {"en": predicted_type, "no": predicted_type_no},
+        "classificationConfidence": confidence,
+        "reasoning": {
+            "en": (
+                "This is a stub response. Classification is selected from uploaded bytes via deterministic hashing, "
+                "not from a clinical model."
+            ),
+            "no": (
+                "Dette er et stub-svar. Klassifikasjon velges fra opplastede bytes via deterministisk hashing, "
+                "ikke fra en klinisk modell."
+            ),
+        },
+        "proposedTnmStage": {"en": f"{proposed_tnm} (proposed)", "no": f"{proposed_tnm} (foreslatt)"},
+        "classifications": [
+            {
+                "side": {"en": "Left", "no": "Venstre"},
+                "prediction": {"en": predicted_type, "no": predicted_type_no},
+                "confidence": left_confidence,
+                "explanation": {
+                    "en": "Left-side result derived from deterministic content-hash mock signal.",
+                    "no": "Resultat for venstre side utledet fra deterministisk mock-signal basert pa innholdshash.",
+                },
+            },
+            {
+                "side": {"en": "Right", "no": "Hoyre"},
+                "prediction": {"en": predicted_type, "no": predicted_type_no},
+                "confidence": right_confidence,
+                "explanation": {
+                    "en": "Right-side result derived from deterministic content-hash mock signal.",
+                    "no": "Resultat for hoyre side utledet fra deterministisk mock-signal basert pa innholdshash.",
+                },
+            },
+        ],
     }
 
     return JSONResponse(content=response)
