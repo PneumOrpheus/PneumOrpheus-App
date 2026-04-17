@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { resolveLocalizedText } from "@/lib/analysis-localization";
 import { getServerI18n } from "@/lib/server-i18n";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/utils/supabase/server";
@@ -22,11 +23,11 @@ type AnalysisRow = {
   created_at: string;
   modality: string;
   status: string;
-  study_file_name: string | null;
+  plot_file_name: string | null;
 };
 
 export default async function PatientsPage() {
-  const { t } = await getServerI18n();
+  const { language, t } = await getServerI18n();
   const supabase = await createClient();
   const {
     data: { user },
@@ -40,7 +41,7 @@ export default async function PatientsPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("analyses")
-      .select("id, patient_id, findings, created_at, modality, status, study_file_name")
+      .select("id, patient_id, findings, created_at, modality, status, plot_file_name")
       .eq("user_id", user?.id ?? "")
       .order("created_at", { ascending: false }),
   ]);
@@ -54,6 +55,52 @@ export default async function PatientsPage() {
     if (normalized.includes("fail") || normalized.includes("error")) return "destructive" as const;
     if (normalized.includes("progress") || normalized.includes("pending")) return "secondary" as const;
     return "outline" as const;
+  };
+
+  const localizeSex = (sex: string | null) => {
+    if (!sex) {
+      return t.common.unknown;
+    }
+
+    if (language === "no") {
+      if (sex === "Female") return "Kvinne";
+      if (sex === "Male") return "Mann";
+    }
+
+    if (language === "en") {
+      if (sex === "Kvinne") return "Female";
+      if (sex === "Mann") return "Male";
+    }
+
+    return sex;
+  };
+
+  const localizeModality = (modality: string) => {
+    if (language === "no") {
+      if (modality === "CT Chest") return "Thorax CT";
+      if (modality === "Chest PET") return "Thorax PET";
+    }
+
+    if (language === "en") {
+      if (modality === "Thorax CT") return "CT Chest";
+      if (modality === "Thorax PET") return "Chest PET";
+    }
+
+    return modality;
+  };
+
+  const localizeStatus = (status: string) => {
+    if (language === "no") {
+      if (status === "Completed") return "Fullfort";
+      if (status === "In Review") return "Til vurdering";
+    }
+
+    if (language === "en") {
+      if (status === "Fullfort") return "Completed";
+      if (status === "Til vurdering") return "In Review";
+    }
+
+    return status;
   };
 
   return (
@@ -80,6 +127,11 @@ export default async function PatientsPage() {
             : undefined;
           const latestByDate = analyses.find((analysis) => analysis.patient_id === patient.id);
           const latest = latestByReference ?? latestByDate;
+          const localizedLatestFindings = latest
+            ? resolveLocalizedText(latest.findings, language) ?? latest.findings ?? t.common.noData
+            : t.common.noData;
+          const localizedLatestModality = latest ? localizeModality(latest.modality) : t.common.noData;
+          const localizedLatestStatus = latest ? localizeStatus(latest.status) : t.common.noData;
 
           return (
             <Card key={patient.id} className="border border-brand/20 ring-0 dark:border-zinc-800">
@@ -87,7 +139,7 @@ export default async function PatientsPage() {
                 <CardTitle className="text-lg">{patient.name}</CardTitle>
                 <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
                   <Badge variant="outline">{patient.id}</Badge>
-                  <Badge variant="secondary">{patient.sex ?? t.common.unknown}</Badge>
+                  <Badge variant="secondary">{localizeSex(patient.sex)}</Badge>
                   <Badge variant="outline">
                     {patient.age ?? t.common.unknown}
                     {patient.age ? ` ${t.patients.years}` : ""}
@@ -100,23 +152,23 @@ export default async function PatientsPage() {
 
               <CardContent>
                 {latest ? (
-                <div className="space-y-2 text-sm">
-                  <p className="inline-flex items-center gap-2">
-                    {t.patients.latestReport}: <strong>{latest.id}</strong>
-                    <Badge variant={getStatusVariant(latest.status)}>{latest.status}</Badge>
-                  </p>
-                  <p className="text-zinc-600 dark:text-zinc-400">
-                    {latest.modality} · {new Date(latest.created_at).toLocaleDateString()}
-                  </p>
-                  <p className="text-zinc-600 dark:text-zinc-400">{t.patients.file}: {latest.study_file_name ?? t.common.noData}</p>
-                  <p className="text-zinc-600 dark:text-zinc-400">{latest.findings}</p>
-                  <Link href={`/analysis/${latest.id}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-1")}>
-                    {t.patients.openReport}
-                  </Link>
-                </div>
-              ) : (
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">{t.patients.noAnalyses}</p>
-              )}
+                  <div className="space-y-2 text-sm">
+                    <p className="inline-flex items-center gap-2">
+                      {t.patients.latestReport}: <strong>{latest.id}</strong>
+                      <Badge variant={getStatusVariant(latest.status)}>{localizedLatestStatus}</Badge>
+                    </p>
+                    <p className="text-zinc-600 dark:text-zinc-400">
+                      {localizedLatestModality} - {new Date(latest.created_at).toLocaleDateString()}
+                    </p>
+                    <p className="text-zinc-600 dark:text-zinc-400">{t.patients.file}: {latest.plot_file_name ?? t.common.noData}</p>
+                    <p className="text-zinc-600 dark:text-zinc-400">{localizedLatestFindings}</p>
+                    <Link href={`/analysis/${latest.id}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-1")}>
+                      {t.patients.openReport}
+                    </Link>
+                  </div>
+                ) : (
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">{t.patients.noAnalyses}</p>
+                )}
               </CardContent>
             </Card>
           );

@@ -17,12 +17,12 @@ type AnalysisRow = {
   modality: string;
   status: string;
   created_at: string;
-  study_file_name: string | null;
-  study_file_size_bytes: number | null;
+  plot_file_name: string | null;
+  plot_file_size_bytes: number | null;
 };
 
 export default async function AnalysesPage() {
-  const { t } = await getServerI18n();
+  const { language, t } = await getServerI18n();
   const supabase = await createClient();
   const {
     data: { user },
@@ -30,7 +30,7 @@ export default async function AnalysesPage() {
 
   const { data } = await supabase
     .from("analyses")
-    .select("id, patient_name, modality, status, created_at, study_file_name, study_file_size_bytes")
+    .select("id, patient_name, modality, status, created_at, plot_file_name, plot_file_size_bytes")
     .eq("user_id", user?.id ?? "")
     .order("created_at", { ascending: false });
 
@@ -43,6 +43,34 @@ export default async function AnalysesPage() {
     if (normalized.includes("fail") || normalized.includes("error")) return "destructive" as const;
     if (normalized.includes("progress") || normalized.includes("pending")) return "secondary" as const;
     return "outline" as const;
+  };
+
+  const localizeModality = (modality: string) => {
+    if (language === "no") {
+      if (modality === "CT Chest") return "Thorax CT";
+      if (modality === "Chest PET") return "Thorax PET";
+    }
+
+    if (language === "en") {
+      if (modality === "Thorax CT") return "CT Chest";
+      if (modality === "Thorax PET") return "Chest PET";
+    }
+
+    return modality;
+  };
+
+  const localizeStatus = (status: string) => {
+    if (language === "no") {
+      if (status === "Completed") return "Fullfort";
+      if (status === "In Review") return "Til vurdering";
+    }
+
+    if (language === "en") {
+      if (status === "Fullfort") return "Completed";
+      if (status === "Til vurdering") return "In Review";
+    }
+
+    return status;
   };
 
   return (
@@ -81,12 +109,14 @@ export default async function AnalysesPage() {
               </TableRow>
             ) : analyses.map((analysis) => {
               const analysisHref = `/analysis/${analysis.id}`;
+              const localizedModality = localizeModality(analysis.modality);
+              const localizedStatus = localizeStatus(analysis.status);
 
               return (
                 <TableRow key={analysis.id} className="cursor-pointer border-brand/10 hover:bg-brand/5 focus-within:bg-brand/10 dark:border-zinc-800 dark:hover:bg-zinc-800/60 dark:focus-within:bg-zinc-800">
                   <TableCell className="px-4 py-3">
-                    <Link href={analysisHref} className={`${cellLinkClass} font-medium`}>
-                      {analysis.id}
+                    <Link href={analysisHref} className={cellLinkClass}>
+                      {new Date(analysis.created_at).toLocaleDateString()}
                     </Link>
                   </TableCell>
                   <TableCell className="px-4 py-3">
@@ -96,27 +126,28 @@ export default async function AnalysesPage() {
                   </TableCell>
                   <TableCell className="px-4 py-3">
                     <Link href={analysisHref} className={cellLinkClass}>
-                      {analysis.modality}
+                      {analysis.id}
                     </Link>
                   </TableCell>
                   <TableCell className="px-4 py-3">
                     <Link href={analysisHref} className={cellLinkClass}>
-                      {analysis.study_file_name ?? "-"}
-                      {analysis.study_file_size_bytes ? (
+                      {localizedModality}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <Link href={analysisHref} className={cellLinkClass}>
+                      <span className="block text-xs text-zinc-500 dark:text-zinc-400">{t.analyses.plotFile}</span>
+                      <span className="block">{analysis.plot_file_name ?? t.common.noData}</span>
+                      {analysis.plot_file_size_bytes ? (
                         <span className="block text-xs text-zinc-500 dark:text-zinc-400">
-                          {(analysis.study_file_size_bytes / (1024 * 1024)).toFixed(2)} MB
+                          {(analysis.plot_file_size_bytes / (1024 * 1024)).toFixed(2)} MB
                         </span>
                       ) : null}
                     </Link>
                   </TableCell>
                   <TableCell className="px-4 py-3">
                     <Link href={analysisHref} className={`${cellLinkClass} inline-flex`}>
-                      <Badge variant={getStatusVariant(analysis.status)}>{analysis.status}</Badge>
-                    </Link>
-                  </TableCell>
-                  <TableCell className="px-4 py-3">
-                    <Link href={analysisHref} className={cellLinkClass}>
-                      {new Date(analysis.created_at).toLocaleDateString()}
+                      <Badge variant={getStatusVariant(analysis.status)}>{localizedStatus}</Badge>
                     </Link>
                   </TableCell>
                 </TableRow>
