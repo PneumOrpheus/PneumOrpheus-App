@@ -1,4 +1,11 @@
 import { createClient } from "@/utils/supabase/server";
+import {
+  mergeLocalizedText,
+  resolveLocalizedText,
+  toStoredLocalizedJsonValue,
+  toStoredLocalizedText,
+  type LocalizedTextMap,
+} from "@/lib/analysis-localization";
 import { NextResponse } from "next/server";
 
 const MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024;
@@ -6,11 +13,13 @@ const MAX_INFERENCE_DURATION_MS = 120_000;
 
 type AnalysisStatus = "Completed" | "In Review";
 
+type LocalizedTextValue = string | LocalizedTextMap;
+
 type ClassificationItem = {
-  side: string;
-  prediction: string;
+  side: LocalizedTextValue;
+  prediction: LocalizedTextValue;
   confidence: number;
-  explanation: string;
+  explanation: LocalizedTextValue;
 };
 
 type InferenceRecord = Record<string, unknown>;
@@ -18,7 +27,11 @@ type InferenceRecord = Record<string, unknown>;
 type NormalizedInferenceResult = {
   findings: string;
   classifications: ClassificationItem[];
-  segmentationData: unknown;
+  plotFilePath: string | null;
+  plotFileName: string | null;
+  plotFileSizeBytes: number | null;
+  plotFileMimeType: string | null;
+  visualizationData: InferenceRecord | null;
   cancerType: string | null;
   classificationConfidence: number | null;
   reasoning: string | null;
@@ -46,7 +59,7 @@ const asString = (value: unknown): string | null => {
   }
 
   const trimmed = value.trim();
-  return trimmed ? trimmed : null;
+  return trimmed.length ? trimmed : null;
 };
 
 const asNumber = (value: unknown): number | null => {
@@ -70,18 +83,81 @@ const asObject = (value: unknown): InferenceRecord | null => {
   return value as InferenceRecord;
 };
 
+const getFirstDefinedValue = (record: InferenceRecord | null, keys: string[]): unknown => {
+  if (!record) {
+    return null;
+  }
+
+  for (const key of keys) {
+    const value = record[key];
+    if (value !== null && value !== undefined) {
+      return value;
+    }
+  }
+
+  return null;
+};
+
+const normalizeRequiredLocalizedJsonValue = (
+  baseValue: unknown,
+  norwegianValue: unknown,
+  fallbackEnglish: string,
+  fallbackNorwegian?: string,
+): LocalizedTextValue => {
+  const merged =
+    mergeLocalizedText(baseValue, norwegianValue) ??
+    mergeLocalizedText(fallbackEnglish, fallbackNorwegian ?? fallbackEnglish);
+
+  return toStoredLocalizedJsonValue(merged) ?? fallbackEnglish;
+};
+
+const normalizeOptionalLocalizedText = (baseValue: unknown, norwegianValue: unknown): string | null => {
+  const merged = mergeLocalizedText(baseValue, norwegianValue);
+  if (!merged) {
+    return null;
+  }
+
+  return toStoredLocalizedText(merged);
+};
+
+const normalizeRequiredLocalizedText = (
+  baseValue: unknown,
+  norwegianValue: unknown,
+  fallbackEnglish: string,
+  fallbackNorwegian?: string,
+): string => {
+  const merged =
+    mergeLocalizedText(baseValue, norwegianValue) ??
+    mergeLocalizedText(fallbackEnglish, fallbackNorwegian ?? fallbackEnglish);
+
+  return toStoredLocalizedText(merged) ?? fallbackEnglish;
+};
+
 const parseClassificationItem = (input: unknown): ClassificationItem | null => {
   const item = asObject(input);
   if (!item) {
     return null;
   }
 
-  const side = asString(item.side) ?? asString(item.region) ?? "Primary";
-  const prediction =
-    asString(item.prediction) ?? asString(item.label) ?? asString(item.cancerType) ?? "Unknown";
+  const side = normalizeRequiredLocalizedJsonValue(
+    getFirstDefinedValue(item, ["side", "region"]),
+    getFirstDefinedValue(item, ["sideNo", "side_no", "regionNo", "region_no"]),
+    "Primary",
+    "Primar",
+  );
+  const prediction = normalizeRequiredLocalizedJsonValue(
+    getFirstDefinedValue(item, ["prediction", "label", "cancerType", "cancer_type"]),
+    getFirstDefinedValue(item, ["predictionNo", "prediction_no", "labelNo", "label_no", "cancerTypeNo", "cancer_type_no"]),
+    "Unknown",
+    "Ukjent",
+  );
   const confidence = asNumber(item.confidence) ?? asNumber(item.probability) ?? 0;
-  const explanation =
-    asString(item.explanation) ?? asString(item.reasoning) ?? asString(item.rationale) ?? "";
+  const explanation = normalizeRequiredLocalizedJsonValue(
+    getFirstDefinedValue(item, ["explanation", "reasoning", "rationale"]),
+    getFirstDefinedValue(item, ["explanationNo", "explanation_no", "reasoningNo", "reasoning_no", "rationaleNo", "rationale_no"]),
+    "No explanation provided.",
+    "Ingen begrunnelse oppgitt.",
+  );
 
   return {
     side,
@@ -89,6 +165,35 @@ const parseClassificationItem = (input: unknown): ClassificationItem | null => {
     confidence: Math.max(0, Math.min(1, confidence > 1 ? confidence / 100 : confidence)),
     explanation,
   };
+};
+
+const extractVisualizationData = (record: InferenceRecord): InferenceRecord | null => {
+  const direct = asObject(
+    getFirstDefinedValue(record, [
+      "visualizationData",
+      "visualization_data",
+      "visualization",
+      "plotVisualization",
+      "plot_visualization",
+      "overlayVisualization",
+      "overlay_visualization",
+    ]),
+  );
+
+  if (direct && Array.isArray(direct.slices)) {
+    return direct;
+  }
+
+  const legacySegmentation = asObject(
+    getFirstDefinedValue(record, ["segmentationData", "segmentation", "segmentation_output"]),
+  );
+  const legacyVisualization = asObject(legacySegmentation?.visualization);
+
+  if (legacyVisualization && Array.isArray(legacyVisualization.slices)) {
+    return legacyVisualization;
+  }
+
+  return null;
 };
 
 const normalizeInferenceResult = (payload: unknown): NormalizedInferenceResult => {
@@ -106,19 +211,21 @@ const normalizeInferenceResult = (payload: unknown): NormalizedInferenceResult =
 
   const topClassification = asObject(data.classification);
 
-  const inferredCancerType =
-    asString(data.cancerType) ??
-    asString(data.classificationType) ??
-    asString(topClassification?.label) ??
-    asString(topClassification?.prediction) ??
-    (classifications[0]?.prediction ?? null);
+  const inferredCancerType = normalizeOptionalLocalizedText(
+    getFirstDefinedValue(data, ["cancerType", "classificationType"]) ??
+      getFirstDefinedValue(topClassification, ["label", "prediction", "cancerType", "cancer_type"]) ??
+      (classifications[0]?.prediction ?? null),
+    getFirstDefinedValue(data, ["cancerTypeNo", "cancer_type_no", "classificationTypeNo", "classification_type_no"]) ??
+      getFirstDefinedValue(topClassification, ["labelNo", "label_no", "predictionNo", "prediction_no", "cancerTypeNo", "cancer_type_no"]),
+  );
 
-  const inferredReasoning =
-    asString(data.reasoning) ??
-    asString(data.rationale) ??
-    asString(topClassification?.reasoning) ??
-    asString(topClassification?.explanation) ??
-    (classifications[0]?.explanation || null);
+  const inferredReasoning = normalizeOptionalLocalizedText(
+    getFirstDefinedValue(data, ["reasoning", "rationale"]) ??
+      getFirstDefinedValue(topClassification, ["reasoning", "explanation", "rationale"]) ??
+      (classifications[0]?.explanation ?? null),
+    getFirstDefinedValue(data, ["reasoningNo", "reasoning_no", "rationaleNo", "rationale_no"]) ??
+      getFirstDefinedValue(topClassification, ["reasoningNo", "reasoning_no", "explanationNo", "explanation_no", "rationaleNo", "rationale_no"]),
+  );
 
   const inferredConfidence =
     asNumber(data.classificationConfidence) ??
@@ -130,18 +237,79 @@ const normalizeInferenceResult = (payload: unknown): NormalizedInferenceResult =
       ? null
       : Math.max(0, Math.min(1, inferredConfidence > 1 ? inferredConfidence / 100 : inferredConfidence));
 
-  const segmentationData =
-    data.segmentationData ?? data.segmentation ?? data.segmentationMask ?? data.segmentation_output ?? null;
+  const plotFilePath = asString(
+    getFirstDefinedValue(data, [
+      "plotFilePath",
+      "plot_file_path",
+      "plottedNiftiFilePath",
+      "plotted_nifti_file_path",
+      "combinedNiftiFilePath",
+      "combined_nifti_file_path",
+      "visualizationFilePath",
+      "visualization_file_path",
+    ]),
+  );
+  const plotFileName = asString(
+    getFirstDefinedValue(data, [
+      "plotFileName",
+      "plot_file_name",
+      "plottedNiftiFileName",
+      "plotted_nifti_file_name",
+      "combinedNiftiFileName",
+      "combined_nifti_file_name",
+      "visualizationFileName",
+      "visualization_file_name",
+    ]),
+  );
+  const plotFileSizeBytes = asNumber(
+    getFirstDefinedValue(data, [
+      "plotFileSizeBytes",
+      "plot_file_size_bytes",
+      "plottedNiftiFileSizeBytes",
+      "plotted_nifti_file_size_bytes",
+      "combinedNiftiFileSizeBytes",
+      "combined_nifti_file_size_bytes",
+      "visualizationFileSizeBytes",
+      "visualization_file_size_bytes",
+    ]),
+  );
+  const plotFileMimeType = asString(
+    getFirstDefinedValue(data, [
+      "plotFileMimeType",
+      "plot_file_mime_type",
+      "plottedNiftiFileMimeType",
+      "plotted_nifti_file_mime_type",
+      "combinedNiftiFileMimeType",
+      "combined_nifti_file_mime_type",
+      "visualizationFileMimeType",
+      "visualization_file_mime_type",
+    ]),
+  );
+  const visualizationData = extractVisualizationData(data);
 
-  const proposedTnmStage =
-    asString(data.proposedTnmStage) ?? asString(data.tnmStage) ?? asString(asObject(data.tnm)?.stage) ?? null;
+  const proposedTnmStage = normalizeOptionalLocalizedText(
+    getFirstDefinedValue(data, ["proposedTnmStage", "tnmStage"]) ?? getFirstDefinedValue(asObject(data.tnm), ["stage"]),
+    getFirstDefinedValue(data, ["proposedTnmStageNo", "proposed_tnm_stage_no", "tnmStageNo", "tnm_stage_no"]) ??
+      getFirstDefinedValue(asObject(data.tnm), ["stageNo", "stage_no"]),
+  );
 
-  const findings =
-    asString(data.findings) ??
-    asString(data.summary) ??
-    (inferredCancerType
-      ? `Model predicts ${inferredCancerType}${normalizedConfidence !== null ? ` (${Math.round(normalizedConfidence * 100)}% confidence)` : ""}.`
-      : "Inference completed.");
+  const inferredCancerTypeEn = resolveLocalizedText(inferredCancerType, "en");
+  const inferredCancerTypeNo = resolveLocalizedText(inferredCancerType, "no");
+  const confidenceSuffixEn =
+    normalizedConfidence !== null ? ` (${Math.round(normalizedConfidence * 100)}% confidence)` : "";
+  const confidenceSuffixNo =
+    normalizedConfidence !== null ? ` (${Math.round(normalizedConfidence * 100)}% sannsynlighet)` : "";
+
+  const findings = normalizeRequiredLocalizedText(
+    getFirstDefinedValue(data, ["findings", "summary"]),
+    getFirstDefinedValue(data, ["findingsNo", "findings_no", "summaryNo", "summary_no"]),
+    inferredCancerTypeEn
+      ? `Model predicts ${inferredCancerTypeEn}${confidenceSuffixEn}.`
+      : "Inference completed.",
+    inferredCancerTypeNo
+      ? `Modellen predikerer ${inferredCancerTypeNo}${confidenceSuffixNo}.`
+      : "Inferens fullfort.",
+  );
 
   const hasInferenceOutput =
     classifications.length > 0 ||
@@ -149,12 +317,18 @@ const normalizeInferenceResult = (payload: unknown): NormalizedInferenceResult =
     normalizedConfidence !== null ||
     Boolean(inferredReasoning) ||
     Boolean(proposedTnmStage) ||
-    segmentationData !== null;
+    Boolean(plotFilePath) ||
+    Boolean(plotFileName) ||
+    Boolean(visualizationData);
 
   return {
     findings,
     classifications,
-    segmentationData,
+    plotFilePath,
+    plotFileName,
+    plotFileSizeBytes,
+    plotFileMimeType,
+    visualizationData,
     cancerType: inferredCancerType,
     classificationConfidence: normalizedConfidence,
     reasoning: inferredReasoning,
@@ -256,20 +430,23 @@ export async function POST(request: Request) {
 
     // Sensitive scan bytes are used only in-memory for inference and are not persisted for privacy reasons. We store metadata and inference results in the database, but not the raw file.
     const safeFileName = sanitizeFileName(studyFile.name);
+    const persistedPlotFileName = normalizedInference.plotFileName ?? safeFileName;
+    const persistedPlotFileSize = normalizedInference.plotFileSizeBytes ?? studyFile.size;
+    const persistedPlotFileMimeType = normalizedInference.plotFileMimeType ?? (studyFile.type || null);
 
     const { error: rpcError } = await supabase.rpc("create_analysis_atomic", {
       p_analysis_id: analysisId,
       p_patient_id: patientId,
       p_patient_name: patientName,
       p_modality: modality,
-      p_study_file_path: null,
-      p_study_file_name: safeFileName,
-      p_study_file_size_bytes: studyFile.size,
-      p_study_file_mime_type: studyFile.type || null,
+      p_plot_file_path: normalizedInference.plotFilePath,
+      p_plot_file_name: persistedPlotFileName,
+      p_plot_file_size_bytes: persistedPlotFileSize,
+      p_plot_file_mime_type: persistedPlotFileMimeType,
+      p_visualization_data: normalizedInference.visualizationData,
       p_status: normalizedInference.status,
       p_findings: normalizedInference.findings,
       p_classifications: normalizedInference.classifications,
-      p_segmentation_data: normalizedInference.segmentationData,
       p_cancer_type: normalizedInference.cancerType,
       p_classification_confidence: normalizedInference.classificationConfidence,
       p_reasoning: normalizedInference.reasoning,

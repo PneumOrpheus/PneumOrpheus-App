@@ -47,11 +47,11 @@ create table if not exists public.analyses (
   status public.analysis_status not null,
   findings text not null,
   classifications jsonb not null default '[]'::jsonb,
-  study_file_path text,
-  study_file_name text,
-  study_file_size_bytes bigint,
-  study_file_mime_type text,
-  segmentation_data jsonb,
+  plot_file_path text,
+  plot_file_name text,
+  plot_file_size_bytes bigint,
+  plot_file_mime_type text,
+  visualization_data jsonb,
   cancer_type text,
   classification_confidence double precision,
   reasoning text,
@@ -64,15 +64,24 @@ alter table public.patients alter column sex drop not null;
 alter table public.clinicians add column if not exists name text;
 alter table public.patients add column if not exists clinician_email text;
 alter table public.analyses add column if not exists clinician_email text;
-alter table public.analyses add column if not exists study_file_path text;
-alter table public.analyses add column if not exists study_file_name text;
-alter table public.analyses add column if not exists study_file_size_bytes bigint;
-alter table public.analyses add column if not exists study_file_mime_type text;
-alter table public.analyses add column if not exists segmentation_data jsonb;
+alter table public.analyses add column if not exists plot_file_path text;
+alter table public.analyses add column if not exists plot_file_name text;
+alter table public.analyses add column if not exists plot_file_size_bytes bigint;
+alter table public.analyses add column if not exists plot_file_mime_type text;
+alter table public.analyses add column if not exists visualization_data jsonb;
 alter table public.analyses add column if not exists cancer_type text;
 alter table public.analyses add column if not exists classification_confidence double precision;
 alter table public.analyses add column if not exists reasoning text;
 alter table public.analyses add column if not exists proposed_tnm_stage text;
+alter table public.analyses drop column if exists study_file_path;
+alter table public.analyses drop column if exists study_file_name;
+alter table public.analyses drop column if exists study_file_size_bytes;
+alter table public.analyses drop column if exists study_file_mime_type;
+alter table public.analyses drop column if exists grad_cam_file_path;
+alter table public.analyses drop column if exists grad_cam_file_name;
+alter table public.analyses drop column if exists grad_cam_file_size_bytes;
+alter table public.analyses drop column if exists grad_cam_file_mime_type;
+alter table public.analyses drop column if exists segmentation_data;
 
 do $$
 begin
@@ -203,9 +212,49 @@ drop function if exists public.create_analysis_atomic(
   bigint,
   text,
   text,
+  text,
+  bigint,
+  text,
   public.analysis_status,
   text,
   jsonb,
+  text,
+  double precision,
+  text,
+  text
+);
+
+drop function if exists public.create_analysis_atomic(
+  text,
+  text,
+  text,
+  public.analysis_modality,
+  text,
+  text,
+  bigint,
+  text,
+  text,
+  public.analysis_status,
+  text,
+  jsonb,
+  jsonb,
+  text,
+  double precision,
+  text,
+  text
+);
+
+drop function if exists public.create_analysis_atomic(
+  text,
+  text,
+  text,
+  public.analysis_modality,
+  text,
+  text,
+  bigint,
+  text,
+  public.analysis_status,
+  text,
   jsonb,
   text,
   double precision,
@@ -218,14 +267,14 @@ create or replace function public.create_analysis_atomic(
   p_patient_id text,
   p_patient_name text,
   p_modality public.analysis_modality,
-  p_study_file_path text,
-  p_study_file_name text,
-  p_study_file_size_bytes bigint,
-  p_study_file_mime_type text,
+  p_plot_file_path text default null,
+  p_plot_file_name text default null,
+  p_plot_file_size_bytes bigint default null,
+  p_plot_file_mime_type text default null,
+  p_visualization_data jsonb default null,
   p_status public.analysis_status default 'In Review',
   p_findings text default 'Report submitted. Processing in progress.',
   p_classifications jsonb default '[]'::jsonb,
-  p_segmentation_data jsonb default null,
   p_cancer_type text default null,
   p_classification_confidence double precision default null,
   p_reasoning text default null,
@@ -300,11 +349,11 @@ begin
     status,
     findings,
     classifications,
-    study_file_path,
-    study_file_name,
-    study_file_size_bytes,
-    study_file_mime_type,
-    segmentation_data,
+    plot_file_path,
+    plot_file_name,
+    plot_file_size_bytes,
+    plot_file_mime_type,
+    visualization_data,
     cancer_type,
     classification_confidence,
     reasoning,
@@ -320,11 +369,11 @@ begin
     p_status,
     p_findings,
     coalesce(p_classifications, '[]'::jsonb),
-    p_study_file_path,
-    p_study_file_name,
-    p_study_file_size_bytes,
-    p_study_file_mime_type,
-    p_segmentation_data,
+    p_plot_file_path,
+    p_plot_file_name,
+    p_plot_file_size_bytes,
+    p_plot_file_mime_type,
+    p_visualization_data,
     p_cancer_type,
     p_classification_confidence,
     p_reasoning,
@@ -359,9 +408,9 @@ grant execute on function public.create_analysis_atomic(
   text,
   bigint,
   text,
+  jsonb,
   public.analysis_status,
   text,
-  jsonb,
   jsonb,
   text,
   double precision,
@@ -481,7 +530,21 @@ create policy "study_files_select_own"
 on storage.objects
 for select
 to authenticated
-using (bucket_id = 'study-files' and (storage.foldername(name))[1] = auth.uid()::text);
+using (
+  bucket_id = 'study-files'
+  and (
+    (storage.foldername(name))[1] = auth.uid()::text
+    or exists (
+      select 1
+      from public.analyses as a
+      where a.user_id = auth.uid()
+        and (
+          a.plot_file_path = storage.objects.name
+          or a.plot_file_path = 'study-files/' || storage.objects.name
+        )
+    )
+  )
+);
 
 drop policy if exists "study_files_insert_own" on storage.objects;
 create policy "study_files_insert_own"
