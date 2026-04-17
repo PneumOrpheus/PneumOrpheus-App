@@ -1,13 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
 
 type VisualizationSlice = {
   sliceIndex: number;
   imageDataUrl: string;
-  hasMask?: boolean;
-  maskCoverage?: number;
+  hasOverlay?: boolean;
+  overlayCoverage?: number;
 };
 
 type VisualizationPayload = {
@@ -19,28 +18,42 @@ type VisualizationPayload = {
 
 type Props = {
   visualization: VisualizationPayload;
-  cancerType: string | null;
-  classificationConfidence: number | null;
-  proposedTnmStage: string | null;
   labels: {
     title: string;
     sliceSelector: string;
     slice: string;
-    mask: string;
+    overlay: string;
     detected: string;
     none: string;
-    classification: string;
-    subtype: string;
-    confidence: string;
-    proposedTnm: string;
   };
+};
+
+const formatOverlayPercentage = (value: number | undefined): string | null => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+
+  return `${(Math.max(0, Math.min(1, value)) * 100).toFixed(1)}%`;
+};
+
+const normalizeCoverageToFraction = (value: number | undefined): number | null => {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return null;
+  }
+
+  if (value <= 1) {
+    return Math.max(0, value);
+  }
+
+  if (value <= 100) {
+    return value / 100;
+  }
+
+  return 1;
 };
 
 export function AnalysisVisualization({
   visualization,
-  cancerType,
-  classificationConfidence,
-  proposedTnmStage,
   labels,
 }: Props) {
   const slices = useMemo(() => visualization.slices ?? [], [visualization.slices]);
@@ -61,7 +74,58 @@ export function AnalysisVisualization({
   }, [slices, visualization.defaultSliceIndex]);
 
   const [currentIndex, setCurrentIndex] = useState(defaultSliderIndex);
+
+  useEffect(() => {
+    if (!slices.length) {
+      return;
+    }
+
+    const preload = async () => {
+      const uniqueUrls = [...new Set(slices.map((slice) => slice.imageDataUrl))];
+
+      await Promise.all(
+        uniqueUrls.map(
+          (url) =>
+            new Promise<void>((resolve) => {
+              const image = new window.Image();
+              image.src = url;
+
+              if (typeof image.decode === "function") {
+                image.decode().then(resolve).catch(resolve);
+                return;
+              }
+
+              image.onload = () => resolve();
+              image.onerror = () => resolve();
+            }),
+        ),
+      );
+    };
+
+    void preload();
+  }, [slices]);
+
   const currentSlice = slices[currentIndex] ?? null;
+  const currentOverlayCoverage = normalizeCoverageToFraction(currentSlice?.overlayCoverage);
+  const maxOverlayCoverage = useMemo(() => {
+    let max = 0;
+
+    for (const slice of slices) {
+      const coverage = normalizeCoverageToFraction(slice.overlayCoverage);
+      if (coverage !== null && coverage > max) {
+        max = coverage;
+      }
+    }
+
+    return max;
+  }, [slices]);
+  const normalizedOverlayCoverage =
+    currentOverlayCoverage !== null
+      ? (maxOverlayCoverage > 0
+          ? Math.min(1, currentOverlayCoverage / maxOverlayCoverage)
+          : currentOverlayCoverage)
+      : null;
+  const overlayPercentage = formatOverlayPercentage(normalizedOverlayCoverage ?? undefined);
 
   if (!currentSlice) {
     return null;
@@ -71,63 +135,37 @@ export function AnalysisVisualization({
     <section className="mt-5 space-y-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
       <h3 className="text-base font-semibold">{labels.title}</h3>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
-          <Image
-            src={currentSlice.imageDataUrl}
-            alt={`Processed NIfTI slice ${currentSlice.sliceIndex}`}
-            className="h-auto w-full rounded-md border border-zinc-200 bg-zinc-50 object-contain dark:border-zinc-700 dark:bg-zinc-900"
-            width={640}
-            height={640}
-            unoptimized
+      <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+        <img
+          src={currentSlice.imageDataUrl}
+          alt={`Combined NIfTI slice ${currentSlice.sliceIndex}`}
+          className="h-auto w-full rounded-md border border-zinc-200 bg-zinc-50 object-contain dark:border-zinc-700 dark:bg-zinc-900"
+          loading="eager"
+          decoding="async"
+        />
+
+        <div className="mt-3 space-y-2">
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0, slices.length - 1)}
+            value={currentIndex}
+            onChange={(event) => setCurrentIndex(Number(event.target.value))}
+            className="h-8 w-full cursor-pointer accent-zinc-900 dark:accent-zinc-100"
+            aria-label={labels.sliceSelector}
           />
 
-          <div className="mt-3 space-y-2">
-            <input
-              type="range"
-              min={0}
-              max={Math.max(0, slices.length - 1)}
-              value={currentIndex}
-              onChange={(event) => setCurrentIndex(Number(event.target.value))}
-              className="w-full"
-              aria-label={labels.sliceSelector}
-            />
-
-            <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
-              <span>
-                {labels.slice} {currentSlice.sliceIndex}
-                {typeof visualization.totalSlices === "number" ? ` / ${visualization.totalSlices - 1}` : ""}
-              </span>
-              <span>
-                {labels.mask}: {currentSlice.hasMask ? labels.detected : labels.none}
-                {typeof currentSlice.maskCoverage === "number"
-                  ? ` (${Math.round(currentSlice.maskCoverage * 100)}%)`
-                  : ""}
-              </span>
-            </div>
+          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+            <span>
+              {labels.slice} {currentSlice.sliceIndex}
+              {typeof visualization.totalSlices === "number" ? ` / ${visualization.totalSlices - 1}` : ""}
+            </span>
+            <span>
+              {labels.overlay}: {currentSlice.hasOverlay ? labels.detected : labels.none}
+              {overlayPercentage ? ` (${overlayPercentage})` : ""}
+            </span>
           </div>
         </div>
-
-        <aside className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-700">
-          <h4 className="text-sm font-semibold">{labels.classification}</h4>
-          <dl className="mt-2 space-y-3">
-            <div>
-              <dt className="text-zinc-500 dark:text-zinc-400">{labels.subtype}</dt>
-              <dd className="mt-1 font-medium">{cancerType ?? "-"}</dd>
-            </div>
-            <div>
-              <dt className="text-zinc-500 dark:text-zinc-400">{labels.confidence}</dt>
-              <dd className="mt-1 font-medium">
-                {classificationConfidence !== null ? `${Math.round(classificationConfidence * 100)}%` : "-"}
-              </dd>
-            </div>
-          </dl>
-        </aside>
-      </div>
-
-      <div className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-700">
-        <p className="text-zinc-500 dark:text-zinc-400">{labels.proposedTnm}</p>
-        <p className="mt-1 font-medium">{proposedTnmStage ?? "-"}</p>
       </div>
     </section>
   );
