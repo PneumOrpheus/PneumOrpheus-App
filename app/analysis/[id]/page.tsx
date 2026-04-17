@@ -244,7 +244,6 @@ export default async function AnalysisDetailPage({
   const editableReasoningValue = resolveLocalizedText(analysis.reasoning, language) ?? "";
   const editableCancerTypeValue = resolveLocalizedText(analysis.cancer_type, language) ?? "";
   const editableProposedTnmStageValue = resolveLocalizedText(analysis.proposed_tnm_stage, language) ?? "";
-  const localizedFindings = editableFindingsValue || t.common.noData;
   const createdAtLocale = language === "no" ? "nb-NO" : "en-US";
 
   const localizeModality = (modality: string) => {
