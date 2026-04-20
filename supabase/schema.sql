@@ -47,10 +47,18 @@ create table if not exists public.analyses (
   status public.analysis_status not null,
   findings text not null,
   classifications jsonb not null default '[]'::jsonb,
-  plot_file_path text,
-  plot_file_name text,
-  plot_file_size_bytes bigint,
-  plot_file_mime_type text,
+  study_file_path text,
+  study_file_name text,
+  study_file_size_bytes bigint,
+  study_file_mime_type text,
+  grad_cam_study_file_path text,
+  grad_cam_study_file_name text,
+  grad_cam_study_file_size_bytes bigint,
+  grad_cam_study_file_mime_type text,
+  segmentation_roi_study_file_path text,
+  segmentation_roi_study_file_name text,
+  segmentation_roi_study_file_size_bytes bigint,
+  segmentation_roi_study_file_mime_type text,
   visualization_data jsonb,
   cancer_type text,
   classification_confidence double precision,
@@ -64,19 +72,188 @@ alter table public.patients alter column sex drop not null;
 alter table public.clinicians add column if not exists name text;
 alter table public.patients add column if not exists clinician_email text;
 alter table public.analyses add column if not exists clinician_email text;
-alter table public.analyses add column if not exists plot_file_path text;
-alter table public.analyses add column if not exists plot_file_name text;
-alter table public.analyses add column if not exists plot_file_size_bytes bigint;
-alter table public.analyses add column if not exists plot_file_mime_type text;
+alter table public.analyses add column if not exists study_file_path text;
+alter table public.analyses add column if not exists study_file_name text;
+alter table public.analyses add column if not exists study_file_size_bytes bigint;
+alter table public.analyses add column if not exists study_file_mime_type text;
+alter table public.analyses add column if not exists grad_cam_study_file_path text;
+alter table public.analyses add column if not exists grad_cam_study_file_name text;
+alter table public.analyses add column if not exists grad_cam_study_file_size_bytes bigint;
+alter table public.analyses add column if not exists grad_cam_study_file_mime_type text;
+alter table public.analyses add column if not exists segmentation_roi_study_file_path text;
+alter table public.analyses add column if not exists segmentation_roi_study_file_name text;
+alter table public.analyses add column if not exists segmentation_roi_study_file_size_bytes bigint;
+alter table public.analyses add column if not exists segmentation_roi_study_file_mime_type text;
 alter table public.analyses add column if not exists visualization_data jsonb;
 alter table public.analyses add column if not exists cancer_type text;
 alter table public.analyses add column if not exists classification_confidence double precision;
 alter table public.analyses add column if not exists reasoning text;
 alter table public.analyses add column if not exists proposed_tnm_stage text;
-alter table public.analyses drop column if exists study_file_path;
-alter table public.analyses drop column if exists study_file_name;
-alter table public.analyses drop column if exists study_file_size_bytes;
-alter table public.analyses drop column if exists study_file_mime_type;
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'analyses'
+      and column_name = 'plot_file_path'
+  ) then
+    update public.analyses
+    set study_file_path = coalesce(study_file_path, plot_file_path)
+    where plot_file_path is not null;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'analyses'
+      and column_name = 'plot_file_name'
+  ) then
+    update public.analyses
+    set study_file_name = coalesce(study_file_name, plot_file_name)
+    where plot_file_name is not null;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'analyses'
+      and column_name = 'plot_file_size_bytes'
+  ) then
+    update public.analyses
+    set study_file_size_bytes = coalesce(study_file_size_bytes, plot_file_size_bytes)
+    where plot_file_size_bytes is not null;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'analyses'
+      and column_name = 'plot_file_mime_type'
+  ) then
+    update public.analyses
+    set study_file_mime_type = coalesce(study_file_mime_type, plot_file_mime_type)
+    where plot_file_mime_type is not null;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'analyses'
+      and column_name = 'grad_cam_plot_file_path'
+  ) then
+    update public.analyses
+    set grad_cam_study_file_path = coalesce(grad_cam_study_file_path, grad_cam_plot_file_path)
+    where grad_cam_plot_file_path is not null;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'analyses'
+      and column_name = 'grad_cam_plot_file_name'
+  ) then
+    update public.analyses
+    set grad_cam_study_file_name = coalesce(grad_cam_study_file_name, grad_cam_plot_file_name)
+    where grad_cam_plot_file_name is not null;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'analyses'
+      and column_name = 'grad_cam_plot_file_size_bytes'
+  ) then
+    update public.analyses
+    set grad_cam_study_file_size_bytes = coalesce(grad_cam_study_file_size_bytes, grad_cam_plot_file_size_bytes)
+    where grad_cam_plot_file_size_bytes is not null;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'analyses'
+      and column_name = 'grad_cam_plot_file_mime_type'
+  ) then
+    update public.analyses
+    set grad_cam_study_file_mime_type = coalesce(grad_cam_study_file_mime_type, grad_cam_plot_file_mime_type)
+    where grad_cam_plot_file_mime_type is not null;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'analyses'
+      and column_name = 'segmentation_roi_plot_file_path'
+  ) then
+    update public.analyses
+    set segmentation_roi_study_file_path = coalesce(segmentation_roi_study_file_path, segmentation_roi_plot_file_path)
+    where segmentation_roi_plot_file_path is not null;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'analyses'
+      and column_name = 'segmentation_roi_plot_file_name'
+  ) then
+    update public.analyses
+    set segmentation_roi_study_file_name = coalesce(segmentation_roi_study_file_name, segmentation_roi_plot_file_name)
+    where segmentation_roi_plot_file_name is not null;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'analyses'
+      and column_name = 'segmentation_roi_plot_file_size_bytes'
+  ) then
+    update public.analyses
+    set segmentation_roi_study_file_size_bytes = coalesce(segmentation_roi_study_file_size_bytes, segmentation_roi_plot_file_size_bytes)
+    where segmentation_roi_plot_file_size_bytes is not null;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'analyses'
+      and column_name = 'segmentation_roi_plot_file_mime_type'
+  ) then
+    update public.analyses
+    set segmentation_roi_study_file_mime_type = coalesce(segmentation_roi_study_file_mime_type, segmentation_roi_plot_file_mime_type)
+    where segmentation_roi_plot_file_mime_type is not null;
+  end if;
+end
+$$;
+
+drop policy if exists "study_files_select_own" on storage.objects;
+drop policy if exists "study_files_insert_own" on storage.objects;
+drop policy if exists "study_files_update_own" on storage.objects;
+drop policy if exists "study_files_delete_own" on storage.objects;
+
+alter table public.analyses drop column if exists plot_file_path;
+alter table public.analyses drop column if exists plot_file_name;
+alter table public.analyses drop column if exists plot_file_size_bytes;
+alter table public.analyses drop column if exists plot_file_mime_type;
+alter table public.analyses drop column if exists grad_cam_plot_file_path;
+alter table public.analyses drop column if exists grad_cam_plot_file_name;
+alter table public.analyses drop column if exists grad_cam_plot_file_size_bytes;
+alter table public.analyses drop column if exists grad_cam_plot_file_mime_type;
+alter table public.analyses drop column if exists segmentation_roi_plot_file_path;
+alter table public.analyses drop column if exists segmentation_roi_plot_file_name;
+alter table public.analyses drop column if exists segmentation_roi_plot_file_size_bytes;
+alter table public.analyses drop column if exists segmentation_roi_plot_file_mime_type;
 alter table public.analyses drop column if exists grad_cam_file_path;
 alter table public.analyses drop column if exists grad_cam_file_name;
 alter table public.analyses drop column if exists grad_cam_file_size_bytes;
@@ -262,15 +439,42 @@ drop function if exists public.create_analysis_atomic(
   text
 );
 
+drop function if exists public.create_analysis_atomic(
+  text,
+  text,
+  text,
+  public.analysis_modality,
+  text,
+  text,
+  bigint,
+  text,
+  jsonb,
+  public.analysis_status,
+  text,
+  jsonb,
+  text,
+  double precision,
+  text,
+  text
+);
+
 create or replace function public.create_analysis_atomic(
   p_analysis_id text,
   p_patient_id text,
   p_patient_name text,
   p_modality public.analysis_modality,
-  p_plot_file_path text default null,
-  p_plot_file_name text default null,
-  p_plot_file_size_bytes bigint default null,
-  p_plot_file_mime_type text default null,
+  p_study_file_path text default null,
+  p_study_file_name text default null,
+  p_study_file_size_bytes bigint default null,
+  p_study_file_mime_type text default null,
+  p_grad_cam_study_file_path text default null,
+  p_grad_cam_study_file_name text default null,
+  p_grad_cam_study_file_size_bytes bigint default null,
+  p_grad_cam_study_file_mime_type text default null,
+  p_segmentation_roi_study_file_path text default null,
+  p_segmentation_roi_study_file_name text default null,
+  p_segmentation_roi_study_file_size_bytes bigint default null,
+  p_segmentation_roi_study_file_mime_type text default null,
   p_visualization_data jsonb default null,
   p_status public.analysis_status default 'In Review',
   p_findings text default 'Report submitted. Processing in progress.',
@@ -286,7 +490,6 @@ security invoker
 set search_path = public
 as $$
 declare
-  current_ids text[];
   current_clinician_email text;
   current_clinician_name text;
 begin
@@ -349,10 +552,18 @@ begin
     status,
     findings,
     classifications,
-    plot_file_path,
-    plot_file_name,
-    plot_file_size_bytes,
-    plot_file_mime_type,
+    study_file_path,
+    study_file_name,
+    study_file_size_bytes,
+    study_file_mime_type,
+    grad_cam_study_file_path,
+    grad_cam_study_file_name,
+    grad_cam_study_file_size_bytes,
+    grad_cam_study_file_mime_type,
+    segmentation_roi_study_file_path,
+    segmentation_roi_study_file_name,
+    segmentation_roi_study_file_size_bytes,
+    segmentation_roi_study_file_mime_type,
     visualization_data,
     cancer_type,
     classification_confidence,
@@ -369,10 +580,18 @@ begin
     p_status,
     p_findings,
     coalesce(p_classifications, '[]'::jsonb),
-    p_plot_file_path,
-    p_plot_file_name,
-    p_plot_file_size_bytes,
-    p_plot_file_mime_type,
+    p_study_file_path,
+    p_study_file_name,
+    p_study_file_size_bytes,
+    p_study_file_mime_type,
+    p_grad_cam_study_file_path,
+    p_grad_cam_study_file_name,
+    p_grad_cam_study_file_size_bytes,
+    p_grad_cam_study_file_mime_type,
+    p_segmentation_roi_study_file_path,
+    p_segmentation_roi_study_file_name,
+    p_segmentation_roi_study_file_size_bytes,
+    p_segmentation_roi_study_file_mime_type,
     p_visualization_data,
     p_cancer_type,
     p_classification_confidence,
@@ -380,21 +599,30 @@ begin
     p_proposed_tnm_stage
   );
 
-  select recent_analysis_ids
-  into current_ids
-  from public.patients
-  where id = p_patient_id and user_id = auth.uid()
-  for update;
-
-  current_ids := array_remove(coalesce(current_ids, '{}'::text[]), p_analysis_id);
-  current_ids := array_prepend(p_analysis_id, current_ids);
-
-  if coalesce(array_length(current_ids, 1), 0) > 20 then
-    current_ids := current_ids[1:20];
-  end if;
-
   update public.patients
-  set recent_analysis_ids = current_ids
+  set recent_analysis_ids = (
+    case
+      when coalesce(
+        array_length(
+          array_prepend(
+            p_analysis_id,
+            array_remove(coalesce(public.patients.recent_analysis_ids, '{}'::text[]), p_analysis_id)
+          ),
+          1
+        ),
+        0
+      ) > 20 then (
+        array_prepend(
+          p_analysis_id,
+          array_remove(coalesce(public.patients.recent_analysis_ids, '{}'::text[]), p_analysis_id)
+        )
+      )[1:20]
+      else array_prepend(
+        p_analysis_id,
+        array_remove(coalesce(public.patients.recent_analysis_ids, '{}'::text[]), p_analysis_id)
+      )
+    end
+  )
   where id = p_patient_id and user_id = auth.uid();
 end;
 $$;
@@ -404,6 +632,14 @@ grant execute on function public.create_analysis_atomic(
   text,
   text,
   public.analysis_modality,
+  text,
+  text,
+  bigint,
+  text,
+  text,
+  text,
+  bigint,
+  text,
   text,
   text,
   bigint,
@@ -539,8 +775,12 @@ using (
       from public.analyses as a
       where a.user_id = auth.uid()
         and (
-          a.plot_file_path = storage.objects.name
-          or a.plot_file_path = 'study-files/' || storage.objects.name
+          a.study_file_path = storage.objects.name
+          or a.study_file_path = 'study-files/' || storage.objects.name
+          or a.grad_cam_study_file_path = storage.objects.name
+          or a.grad_cam_study_file_path = 'study-files/' || storage.objects.name
+          or a.segmentation_roi_study_file_path = storage.objects.name
+          or a.segmentation_roi_study_file_path = 'study-files/' || storage.objects.name
         )
     )
   )

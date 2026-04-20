@@ -23,7 +23,7 @@ type AnalysisRow = {
   created_at: string;
   modality: string;
   status: string;
-  plot_file_name: string | null;
+  study_file_name: string | null;
 };
 
 export default async function PatientsPage() {
@@ -41,7 +41,7 @@ export default async function PatientsPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("analyses")
-      .select("id, patient_id, findings, created_at, modality, status, plot_file_name")
+      .select("id, patient_id, findings, created_at, modality, status, study_file_name")
       .eq("user_id", user?.id ?? "")
       .order("created_at", { ascending: false }),
   ]);
@@ -160,7 +160,7 @@ export default async function PatientsPage() {
                     <p className="text-zinc-600 dark:text-zinc-400">
                       {localizedLatestModality} - {new Date(latest.created_at).toLocaleDateString()}
                     </p>
-                    <p className="text-zinc-600 dark:text-zinc-400">{t.patients.file}: {latest.plot_file_name ?? t.common.noData}</p>
+                    <p className="text-zinc-600 dark:text-zinc-400">{t.patients.file}: {latest.study_file_name ?? t.common.noData}</p>
                     <p className="text-zinc-600 dark:text-zinc-400">{localizedLatestFindings}</p>
                     <Link href={`/analysis/${latest.id}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-1")}>
                       {t.patients.openReport}

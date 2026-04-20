@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { AnalysisEditableFieldsForm } from "@/components/analysis-editable-fields-form";
 import { AnalysisVisualization } from "@/components/analysis-visualization";
-import { NiftiStorageVisualization } from "@/components/nifti-storage-visualization";
+import {
+  AnalysisNiftiVariantSelector,
+  type NiftiVariantOption,
+} from "@/components/analysis-nifti-variant-selector";
 import {
   Accordion,
   AccordionContent,
@@ -33,10 +36,18 @@ type AnalysisRow = {
   status: string;
   findings: LocalizedTextValue;
   classifications: ClassificationItem[] | null;
-  plot_file_path: string | null;
-  plot_file_name: string | null;
-  plot_file_size_bytes: number | null;
-  plot_file_mime_type: string | null;
+  study_file_path: string | null;
+  study_file_name: string | null;
+  study_file_size_bytes: number | null;
+  study_file_mime_type: string | null;
+  grad_cam_study_file_path: string | null;
+  grad_cam_study_file_name: string | null;
+  grad_cam_study_file_size_bytes: number | null;
+  grad_cam_study_file_mime_type: string | null;
+  segmentation_roi_study_file_path: string | null;
+  segmentation_roi_study_file_name: string | null;
+  segmentation_roi_study_file_size_bytes: number | null;
+  segmentation_roi_study_file_mime_type: string | null;
   visualization_data: unknown;
   cancer_type: LocalizedTextValue | null;
   classification_confidence: number | null;
@@ -94,6 +105,19 @@ const parsePlotStorageLocation = (value: string): { bucket: string; objectPath: 
     bucket: "study-files",
     objectPath,
   };
+};
+
+const createSignedNiftiFileUrl = async (
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  plotFilePath: string,
+) => {
+  const location = parsePlotStorageLocation(plotFilePath);
+  if (!location) {
+    return null;
+  }
+
+  const { data } = await supabase.storage.from(location.bucket).createSignedUrl(location.objectPath, 3600);
+  return data?.signedUrl ?? null;
 };
 
 const asObject = (value: unknown): Record<string, unknown> | null => {
@@ -220,7 +244,7 @@ export default async function AnalysisDetailPage({
   const { data: analysisData } = await supabase
     .from("analyses")
     .select(
-      "id, patient_id, patient_name, created_at, modality, status, findings, classifications, plot_file_path, plot_file_name, plot_file_size_bytes, plot_file_mime_type, visualization_data, cancer_type, classification_confidence, reasoning, proposed_tnm_stage",
+      "id, patient_id, patient_name, created_at, modality, status, findings, classifications, study_file_path, study_file_name, study_file_size_bytes, study_file_mime_type, grad_cam_study_file_path, grad_cam_study_file_name, grad_cam_study_file_size_bytes, grad_cam_study_file_mime_type, segmentation_roi_study_file_path, segmentation_roi_study_file_name, segmentation_roi_study_file_size_bytes, segmentation_roi_study_file_mime_type, visualization_data, cancer_type, classification_confidence, reasoning, proposed_tnm_stage",
     )
     .eq("id", id)
     .eq("user_id", user?.id ?? "")
@@ -244,7 +268,6 @@ export default async function AnalysisDetailPage({
   const editableReasoningValue = resolveLocalizedText(analysis.reasoning, language) ?? "";
   const editableCancerTypeValue = resolveLocalizedText(analysis.cancer_type, language) ?? "";
   const editableProposedTnmStageValue = resolveLocalizedText(analysis.proposed_tnm_stage, language) ?? "";
-  const localizedFindings = editableFindingsValue || t.common.noData;
   const createdAtLocale = language === "no" ? "nb-NO" : "en-US";
 
   const localizeModality = (modality: string) => {
@@ -301,7 +324,44 @@ export default async function AnalysisDetailPage({
     ? t.analysisDetail.setAsInReview
     : t.analysisDetail.setAsCompleted;
   const visualization = parseVisualization(analysis.visualization_data);
-  let signedPlotFileUrl: string | null = null;
+  const niftiVariantCandidates = [
+    {
+      id: "normalCt" as const,
+      label: t.visualization.normalCtLabel,
+      description: t.visualization.normalCtDescription,
+      plotFilePath: analysis.study_file_path,
+      plotFileName: analysis.study_file_name,
+    },
+    {
+      id: "gradCam" as const,
+      label: t.visualization.gradCamLabel,
+      description: t.visualization.gradCamDescription,
+      plotFilePath: analysis.grad_cam_study_file_path,
+      plotFileName: analysis.grad_cam_study_file_name,
+    },
+    {
+      id: "segmentationRoi" as const,
+      label: t.visualization.segmentationRoiLabel,
+      description: t.visualization.segmentationRoiDescription,
+      plotFilePath: analysis.segmentation_roi_study_file_path,
+      plotFileName: analysis.segmentation_roi_study_file_name,
+    },
+  ];
+
+  const niftiVariantOptions: NiftiVariantOption[] = [];
+
+  for (const option of niftiVariantCandidates) {
+    const plotFilePath = option.plotFilePath?.trim();
+    if (!plotFilePath) {
+      continue;
+    }
+
+    niftiVariantOptions.push({
+      ...option,
+      plotFilePath,
+      signedFileUrl: await createSignedNiftiFileUrl(supabase, plotFilePath),
+    });
+  }
 
   const toggleStatusAction = async () => {
     "use server";
@@ -417,14 +477,6 @@ export default async function AnalysisDetailPage({
     revalidatePath("/patients");
   };
 
-  if (!visualization && analysis.plot_file_path) {
-    const location = parsePlotStorageLocation(analysis.plot_file_path);
-    if (location) {
-      const { data } = await supabase.storage.from(location.bucket).createSignedUrl(location.objectPath, 3600);
-      signedPlotFileUrl = data?.signedUrl ?? null;
-    }
-  }
-
   return (
     <section className="mx-auto max-w-5xl space-y-6">
       <Card className="relative overflow-hidden rounded-2xl border border-brand/20 bg-gradient-to-br from-brand via-third to-fifth text-white shadow-sm">
@@ -469,17 +521,15 @@ export default async function AnalysisDetailPage({
               }}
             />
 
-            {visualization ? (
-              <AnalysisVisualization
-                visualization={visualization}
+            {niftiVariantOptions.length > 0 ? (
+              <AnalysisNiftiVariantSelector
+                options={niftiVariantOptions}
                 labels={t.visualization}
+                selectorTitle={t.visualization.niftiVariantTitle}
+                selectorDescription={t.visualization.niftiVariantDescription}
               />
-            ) : analysis.plot_file_path ? (
-              <NiftiStorageVisualization
-                plotFilePath={analysis.plot_file_path}
-                signedFileUrl={signedPlotFileUrl}
-                labels={t.visualization}
-              />
+            ) : visualization ? (
+              <AnalysisVisualization visualization={visualization} labels={t.visualization} />
             ) : null}
 
             <div className="mt-4 space-y-2">
@@ -503,19 +553,19 @@ export default async function AnalysisDetailPage({
                       </div>
                       <div>
                         <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.plotFile}</dt>
-                        <dd>{analysis.plot_file_name ?? t.analysisDetail.noPlotFile}</dd>
+                        <dd>{analysis.study_file_name ?? t.analysisDetail.noPlotFile}</dd>
                       </div>
                       <div>
                         <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.fileSize}</dt>
                         <dd>
-                          {analysis.plot_file_size_bytes
-                            ? `${(analysis.plot_file_size_bytes / (1024 * 1024)).toFixed(2)} MB`
+                          {analysis.study_file_size_bytes
+                            ? `${(analysis.study_file_size_bytes / (1024 * 1024)).toFixed(2)} MB`
                             : t.common.noData}
                         </dd>
                       </div>
                       <div>
                         <dt className="text-zinc-500 dark:text-zinc-400">{t.analysisDetail.fileType}</dt>
-                        <dd>{analysis.plot_file_mime_type ?? t.common.noData}</dd>
+                        <dd>{analysis.study_file_mime_type ?? t.common.noData}</dd>
                       </div>
                     </dl>
                   </AccordionContent>

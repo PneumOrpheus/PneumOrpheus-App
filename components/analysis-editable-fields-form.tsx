@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -60,20 +60,6 @@ export function AnalysisEditableFieldsForm({
     cancerType: false,
     proposedTnmStage: false,
   });
-
-  useEffect(() => {
-    // Locale changes update initial props from the server; reset local edit state accordingly.
-    setFindings(initialFindings);
-    setReasoning(initialReasoning);
-    setCancerType(initialCancerType);
-    setProposedTnmStage(initialProposedTnmStage);
-    setOpenEditors({
-      findings: false,
-      reasoning: false,
-      cancerType: false,
-      proposedTnmStage: false,
-    });
-  }, [initialFindings, initialReasoning, initialCancerType, initialProposedTnmStage]);
 
   const formId = "clinical-fields-form";
 

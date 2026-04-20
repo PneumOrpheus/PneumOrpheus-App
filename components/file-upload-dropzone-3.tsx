@@ -42,7 +42,11 @@ const Example = () => {
           <FileUploadItem key={index} value={file}>
             <FileUploadItemPreview />
             <FileUploadItemMetadata />
-            <FileUploadItemDelete render={<Button variant="ghost" size="icon" className="size-7" />}><X className="size-4" /></FileUploadItemDelete>
+            <FileUploadItemDelete asChild>
+              <Button variant="ghost" size="icon" className="size-7">
+                <X className="size-4" />
+              </Button>
+            </FileUploadItemDelete>
           </FileUploadItem>
         ))}
       </FileUploadList>

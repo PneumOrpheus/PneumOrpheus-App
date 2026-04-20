@@ -31,6 +31,14 @@ type NormalizedInferenceResult = {
   plotFileName: string | null;
   plotFileSizeBytes: number | null;
   plotFileMimeType: string | null;
+  gradCamPlotFilePath: string | null;
+  gradCamPlotFileName: string | null;
+  gradCamPlotFileSizeBytes: number | null;
+  gradCamPlotFileMimeType: string | null;
+  segmentationRoiPlotFilePath: string | null;
+  segmentationRoiPlotFileName: string | null;
+  segmentationRoiPlotFileSizeBytes: number | null;
+  segmentationRoiPlotFileMimeType: string | null;
   visualizationData: InferenceRecord | null;
   cancerType: string | null;
   classificationConfidence: number | null;
@@ -81,6 +89,24 @@ const asObject = (value: unknown): InferenceRecord | null => {
   }
 
   return value as InferenceRecord;
+};
+
+const inferFileNameFromPath = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const parts = value
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (!parts.length) {
+    return null;
+  }
+
+  const fileName = parts[parts.length - 1] ?? null;
+  return fileName && fileName.length > 0 ? fileName : null;
 };
 
 const getFirstDefinedValue = (record: InferenceRecord | null, keys: string[]): unknown => {
@@ -285,6 +311,86 @@ const normalizeInferenceResult = (payload: unknown): NormalizedInferenceResult =
       "visualization_file_mime_type",
     ]),
   );
+  const gradCamPlotFilePath = asString(
+    getFirstDefinedValue(data, [
+      "gradCamPlotFilePath",
+      "grad_cam_plot_file_path",
+      "gradCamFilePath",
+      "grad_cam_file_path",
+      "gradCamNiftiFilePath",
+      "grad_cam_nifti_file_path",
+    ]),
+  );
+  const gradCamPlotFileName = asString(
+    getFirstDefinedValue(data, [
+      "gradCamPlotFileName",
+      "grad_cam_plot_file_name",
+      "gradCamFileName",
+      "grad_cam_file_name",
+      "gradCamNiftiFileName",
+      "grad_cam_nifti_file_name",
+    ]),
+  );
+  const gradCamPlotFileSizeBytes = asNumber(
+    getFirstDefinedValue(data, [
+      "gradCamPlotFileSizeBytes",
+      "grad_cam_plot_file_size_bytes",
+      "gradCamFileSizeBytes",
+      "grad_cam_file_size_bytes",
+      "gradCamNiftiFileSizeBytes",
+      "grad_cam_nifti_file_size_bytes",
+    ]),
+  );
+  const gradCamPlotFileMimeType = asString(
+    getFirstDefinedValue(data, [
+      "gradCamPlotFileMimeType",
+      "grad_cam_plot_file_mime_type",
+      "gradCamFileMimeType",
+      "grad_cam_file_mime_type",
+      "gradCamNiftiFileMimeType",
+      "grad_cam_nifti_file_mime_type",
+    ]),
+  );
+  const segmentationRoiPlotFilePath = asString(
+    getFirstDefinedValue(data, [
+      "segmentationRoiPlotFilePath",
+      "segmentation_roi_plot_file_path",
+      "segmentationPlotFilePath",
+      "segmentation_plot_file_path",
+      "segmentationRoiFilePath",
+      "segmentation_roi_file_path",
+    ]),
+  );
+  const segmentationRoiPlotFileName = asString(
+    getFirstDefinedValue(data, [
+      "segmentationRoiPlotFileName",
+      "segmentation_roi_plot_file_name",
+      "segmentationPlotFileName",
+      "segmentation_plot_file_name",
+      "segmentationRoiFileName",
+      "segmentation_roi_file_name",
+    ]),
+  );
+  const segmentationRoiPlotFileSizeBytes = asNumber(
+    getFirstDefinedValue(data, [
+      "segmentationRoiPlotFileSizeBytes",
+      "segmentation_roi_plot_file_size_bytes",
+      "segmentationPlotFileSizeBytes",
+      "segmentation_plot_file_size_bytes",
+      "segmentationRoiFileSizeBytes",
+      "segmentation_roi_file_size_bytes",
+    ]),
+  );
+  const segmentationRoiPlotFileMimeType = asString(
+    getFirstDefinedValue(data, [
+      "segmentationRoiPlotFileMimeType",
+      "segmentation_roi_plot_file_mime_type",
+      "segmentationPlotFileMimeType",
+      "segmentation_plot_file_mime_type",
+      "segmentationRoiFileMimeType",
+      "segmentation_roi_file_mime_type",
+    ]),
+  );
   const visualizationData = extractVisualizationData(data);
 
   const proposedTnmStage = normalizeOptionalLocalizedText(
@@ -319,6 +425,10 @@ const normalizeInferenceResult = (payload: unknown): NormalizedInferenceResult =
     Boolean(proposedTnmStage) ||
     Boolean(plotFilePath) ||
     Boolean(plotFileName) ||
+    Boolean(gradCamPlotFilePath) ||
+    Boolean(gradCamPlotFileName) ||
+    Boolean(segmentationRoiPlotFilePath) ||
+    Boolean(segmentationRoiPlotFileName) ||
     Boolean(visualizationData);
 
   return {
@@ -328,6 +438,14 @@ const normalizeInferenceResult = (payload: unknown): NormalizedInferenceResult =
     plotFileName,
     plotFileSizeBytes,
     plotFileMimeType,
+    gradCamPlotFilePath,
+    gradCamPlotFileName,
+    gradCamPlotFileSizeBytes,
+    gradCamPlotFileMimeType,
+    segmentationRoiPlotFilePath,
+    segmentationRoiPlotFileName,
+    segmentationRoiPlotFileSizeBytes,
+    segmentationRoiPlotFileMimeType,
     visualizationData,
     cancerType: inferredCancerType,
     classificationConfidence: normalizedConfidence,
@@ -433,16 +551,28 @@ export async function POST(request: Request) {
     const persistedPlotFileName = normalizedInference.plotFileName ?? safeFileName;
     const persistedPlotFileSize = normalizedInference.plotFileSizeBytes ?? studyFile.size;
     const persistedPlotFileMimeType = normalizedInference.plotFileMimeType ?? (studyFile.type || null);
+    const persistedGradCamPlotFileName =
+      normalizedInference.gradCamPlotFileName ?? inferFileNameFromPath(normalizedInference.gradCamPlotFilePath);
+    const persistedSegmentationRoiPlotFileName =
+      normalizedInference.segmentationRoiPlotFileName ?? inferFileNameFromPath(normalizedInference.segmentationRoiPlotFilePath);
 
     const { error: rpcError } = await supabase.rpc("create_analysis_atomic", {
       p_analysis_id: analysisId,
       p_patient_id: patientId,
       p_patient_name: patientName,
       p_modality: modality,
-      p_plot_file_path: normalizedInference.plotFilePath,
-      p_plot_file_name: persistedPlotFileName,
-      p_plot_file_size_bytes: persistedPlotFileSize,
-      p_plot_file_mime_type: persistedPlotFileMimeType,
+      p_study_file_path: normalizedInference.plotFilePath,
+      p_study_file_name: persistedPlotFileName,
+      p_study_file_size_bytes: persistedPlotFileSize,
+      p_study_file_mime_type: persistedPlotFileMimeType,
+      p_grad_cam_study_file_path: normalizedInference.gradCamPlotFilePath,
+      p_grad_cam_study_file_name: persistedGradCamPlotFileName,
+      p_grad_cam_study_file_size_bytes: normalizedInference.gradCamPlotFileSizeBytes,
+      p_grad_cam_study_file_mime_type: normalizedInference.gradCamPlotFileMimeType,
+      p_segmentation_roi_study_file_path: normalizedInference.segmentationRoiPlotFilePath,
+      p_segmentation_roi_study_file_name: persistedSegmentationRoiPlotFileName,
+      p_segmentation_roi_study_file_size_bytes: normalizedInference.segmentationRoiPlotFileSizeBytes,
+      p_segmentation_roi_study_file_mime_type: normalizedInference.segmentationRoiPlotFileMimeType,
       p_visualization_data: normalizedInference.visualizationData,
       p_status: normalizedInference.status,
       p_findings: normalizedInference.findings,

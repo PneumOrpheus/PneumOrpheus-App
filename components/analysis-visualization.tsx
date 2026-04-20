@@ -136,6 +136,7 @@ export function AnalysisVisualization({
       <h3 className="text-base font-semibold">{labels.title}</h3>
 
       <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={currentSlice.imageDataUrl}
           alt={`Combined NIfTI slice ${currentSlice.sliceIndex}`}

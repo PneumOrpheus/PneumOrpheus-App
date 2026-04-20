@@ -165,6 +165,7 @@ interface FileUploadContextValue {
   dir: Direction;
   inputRef: React.RefObject<HTMLInputElement | null>;
   urlCache: WeakMap<File, string>;
+  onFilesChange: (files: File[]) => void;
 }
 
 const FileUploadContext = React.createContext<FileUploadContextValue | null>(
@@ -257,10 +258,12 @@ function FileUpload(props: FileUploadProps) {
   });
 
   const store = React.useMemo<Store>(() => {
-    let state: StoreState = {
+    const stateRef = {
+      current: {
       files,
       dragOver: false,
       invalid: invalid,
+      } as StoreState,
     };
 
     function reducer(state: StoreState, action: StoreAction): StoreState {
@@ -388,9 +391,9 @@ function FileUpload(props: FileUploadProps) {
     }
 
     return {
-      getState: () => state,
+      getState: () => stateRef.current,
       dispatch: (action) => {
-        state = reducer(state, action);
+        stateRef.current = reducer(stateRef.current, action);
         for (const listener of listeners) {
           listener();
         }
@@ -633,8 +636,9 @@ function FileUpload(props: FileUploadProps) {
       disabled,
       inputRef,
       urlCache,
+      onFilesChange,
     }),
-    [dropzoneId, inputId, listId, labelId, dir, disabled, urlCache],
+    [dropzoneId, inputId, listId, labelId, dir, disabled, urlCache, onFilesChange],
   );
 
   const RootPrimitive = asChild ? SlotPrimitive.Slot : "div";
@@ -781,18 +785,9 @@ function FileUploadDropzone(props: FileUploadDropzoneProps) {
       store.dispatch({ type: "SET_DRAG_OVER", dragOver: false });
 
       const files = Array.from(event.dataTransfer.files);
-      const inputElement = context.inputRef.current;
-      if (!inputElement) return;
-
-      const dataTransfer = new DataTransfer();
-      for (const file of files) {
-        dataTransfer.items.add(file);
-      }
-
-      inputElement.files = dataTransfer.files;
-      inputElement.dispatchEvent(new Event("change", { bubbles: true }));
+      context.onFilesChange(files);
     },
-    [store, context.inputRef, propsRef],
+    [store, context, propsRef],
   );
 
   const onPaste = React.useCallback(
@@ -820,18 +815,9 @@ function FileUploadDropzone(props: FileUploadDropzoneProps) {
 
       if (files.length === 0) return;
 
-      const inputElement = context.inputRef.current;
-      if (!inputElement) return;
-
-      const dataTransfer = new DataTransfer();
-      for (const file of files) {
-        dataTransfer.items.add(file);
-      }
-
-      inputElement.files = dataTransfer.files;
-      inputElement.dispatchEvent(new Event("change", { bubbles: true }));
+      context.onFilesChange(files);
     },
-    [store, context.inputRef, propsRef],
+    [store, context, propsRef],
   );
 
   const onKeyDown = React.useCallback(
@@ -853,11 +839,8 @@ function FileUploadDropzone(props: FileUploadDropzoneProps) {
 
   return (
     <DropzonePrimitive
-      role="region"
       id={context.dropzoneId}
       aria-controls={`${context.inputId} ${context.listId}`}
-      aria-disabled={context.disabled}
-      aria-invalid={invalid}
       data-disabled={context.disabled ? "" : undefined}
       data-dragging={dragOver ? "" : undefined}
       data-invalid={invalid ? "" : undefined}
@@ -946,7 +929,6 @@ function FileUploadList(props: FileUploadListProps) {
     <ListPrimitive
       role="list"
       id={context.listId}
-      aria-orientation={orientation}
       data-orientation={orientation}
       data-slot="file-upload-list"
       data-state={shouldRender ? "active" : "inactive"}
@@ -1076,7 +1058,7 @@ function FileUploadItemPreview(props: FileUploadItemPreviewProps) {
         }
 
         return (
-          // biome-ignore lint/performance/noImgElement: dynamic file URLs from user uploads don't work well with Next.js Image optimization
+          // eslint-disable-next-line @next/next/no-img-element
           <img src={url} alt={file.name} className="size-full object-cover" />
         );
       }
