@@ -17,8 +17,8 @@ type AnalysisRow = {
   modality: string;
   status: string;
   created_at: string;
-  plot_file_name: string | null;
-  plot_file_size_bytes: number | null;
+  study_file_name: string | null;
+  study_file_size_bytes: number | null;
 };
 
 export default async function AnalysesPage() {
@@ -30,7 +30,7 @@ export default async function AnalysesPage() {
 
   const { data } = await supabase
     .from("analyses")
-    .select("id, patient_name, modality, status, created_at, plot_file_name, plot_file_size_bytes")
+    .select("id, patient_name, modality, status, created_at, study_file_name, study_file_size_bytes")
     .eq("user_id", user?.id ?? "")
     .order("created_at", { ascending: false });
 
@@ -137,10 +137,10 @@ export default async function AnalysesPage() {
                   <TableCell className="px-4 py-3">
                     <Link href={analysisHref} className={cellLinkClass}>
                       <span className="block text-xs text-zinc-500 dark:text-zinc-400">{t.analyses.plotFile}</span>
-                      <span className="block">{analysis.plot_file_name ?? t.common.noData}</span>
-                      {analysis.plot_file_size_bytes ? (
+                      <span className="block">{analysis.study_file_name ?? t.common.noData}</span>
+                      {analysis.study_file_size_bytes ? (
                         <span className="block text-xs text-zinc-500 dark:text-zinc-400">
-                          {(analysis.plot_file_size_bytes / (1024 * 1024)).toFixed(2)} MB
+                          {(analysis.study_file_size_bytes / (1024 * 1024)).toFixed(2)} MB
                         </span>
                       ) : null}
                     </Link>
