@@ -14,10 +14,23 @@ type NumericView =
   | Float32Array
   | Float64Array;
 
+type VolumeFrameStats = {
+  min: number;
+  max: number;
+  displayMin: number;
+  displayMax: number;
+  overlayThreshold: number;
+  maxOverlayCoverage: number;
+  isLikelyLabelMap: boolean;
+  explicitMaskValue: number | null;
+};
+
 type DecodedVolume = {
   width: number;
   height: number;
   depth: number;
+  frameCount: number;
+  frameStats: VolumeFrameStats[];
   data: NumericView;
   channels: 1 | 3;
   slope: number;
@@ -26,6 +39,7 @@ type DecodedVolume = {
   max: number;
   overlayThreshold: number;
   maxOverlayCoverage: number;
+  isLikelyLabelMap: boolean;
 };
 
 type VisualizationLabels = {
@@ -41,11 +55,14 @@ type VisualizationLabels = {
 };
 
 type NiftiVariantId = "normalCt" | "gradCam" | "segmentationRoi";
+type ViewPlane = "axial" | "sagittal" | "coronal";
 
 type Props = {
   plotFilePath: string;
   signedFileUrl?: string | null;
   variantId?: NiftiVariantId;
+  invertSliceDirection?: boolean;
+  viewPlane?: ViewPlane;
   prefetchTargets?: Array<{
     plotFilePath: string;
     signedFileUrl?: string | null;
@@ -66,6 +83,26 @@ const GRAD_CAM_INTENSITY_ACTIVE_RATIO_WEIGHT = 0.08;
 const GRAD_CAM_INTENSITY_MIN_DISPLAY_SCORE = 0.01;
 const GRAD_CAM_INTENSITY_DISPLAY_GAMMA = 0.55;
 const GRAD_CAM_INTENSITY_DISPLAY_GAIN = 1.18;
+const LABEL_MAP_VALUE_EPSILON = 1e-3;
+const LABEL_MAP_MAX_DISTINCT_VALUES = 24;
+const DISPLAY_WINDOW_HISTOGRAM_BINS = 2048;
+const DISPLAY_WINDOW_LOWER_PERCENTILE = 0.01;
+const DISPLAY_WINDOW_UPPER_PERCENTILE = 0.995;
+const EXPLICIT_MASK_MIN_VALUE_GAP = 80;
+const EXPLICIT_MASK_MIN_COVERAGE = 0.00005;
+const EXPLICIT_MASK_MAX_COVERAGE = 0.2;
+const SEGMENTATION_LABEL_PALETTE: ReadonlyArray<readonly [number, number, number]> = [
+  [244, 63, 94],
+  [59, 130, 246],
+  [34, 197, 94],
+  [249, 115, 22],
+  [168, 85, 247],
+  [14, 165, 233],
+  [236, 72, 153],
+  [250, 204, 21],
+  [132, 204, 22],
+  [6, 182, 212],
+];
 
 const volumeCache = new Map<string, DecodedVolume>();
 const volumeLoadPromises = new Map<string, Promise<DecodedVolume>>();
@@ -261,6 +298,80 @@ const calibrateGradCamIntensityScore = (rawScore: number): number => {
   return Math.max(0, Math.min(1, boosted));
 };
 
+const blendChannel = (base: number, target: number, strength: number): number => {
+  const mixed = (base * (1 - strength)) + (target * strength);
+  return Math.max(0, Math.min(255, Math.round(mixed)));
+};
+
+const getSegmentationLabelColor = (label: number): readonly [number, number, number] => {
+  const index = Math.max(0, Math.abs(label) - 1) % SEGMENTATION_LABEL_PALETTE.length;
+  return SEGMENTATION_LABEL_PALETTE[index] ?? SEGMENTATION_LABEL_PALETTE[0];
+};
+
+const resolveVariantFrameIndex = (volume: DecodedVolume, variantId: NiftiVariantId): number => {
+  if (volume.frameCount <= 1) {
+    return 0;
+  }
+
+  if (variantId === "segmentationRoi") {
+    for (let frameIndex = 0; frameIndex < volume.frameCount; frameIndex += 1) {
+      const stats = volume.frameStats[frameIndex];
+      if (stats && stats.explicitMaskValue !== null && !stats.isLikelyLabelMap) {
+        return frameIndex;
+      }
+    }
+
+    for (let frameIndex = volume.frameCount - 1; frameIndex >= 0; frameIndex -= 1) {
+      if (volume.frameStats[frameIndex]?.isLikelyLabelMap) {
+        return frameIndex;
+      }
+    }
+
+    return Math.min(1, volume.frameCount - 1);
+  }
+
+  if (variantId === "gradCam") {
+    return Math.min(2, volume.frameCount - 1);
+  }
+
+  return 0;
+};
+
+const resolveSegmentationBaseFrameIndex = (
+  volume: DecodedVolume,
+  segmentationFrameIndex: number,
+): number => {
+  if (volume.frameCount <= 1) {
+    return 0;
+  }
+
+  for (let frameIndex = 0; frameIndex < volume.frameCount; frameIndex += 1) {
+    if (frameIndex === segmentationFrameIndex) {
+      continue;
+    }
+
+    if (!volume.frameStats[frameIndex]?.isLikelyLabelMap) {
+      return frameIndex;
+    }
+  }
+
+  return 0;
+};
+
+const getVariantFrameStats = (volume: DecodedVolume, variantId: NiftiVariantId): VolumeFrameStats => {
+  const frameIndex = resolveVariantFrameIndex(volume, variantId);
+  return volume.frameStats[frameIndex] ?? {
+    min: volume.min,
+    max: volume.max,
+    displayMin: volume.min,
+    displayMax: volume.max,
+    overlayThreshold: volume.overlayThreshold,
+    maxOverlayCoverage: volume.maxOverlayCoverage,
+    isLikelyLabelMap: volume.isLikelyLabelMap,
+    explicitMaskValue: null,
+  };
+};
+
 const decodeNiftiVolume = (buffer: ArrayBuffer): DecodedVolume => {
   let niftiBuffer: ArrayBuffer = buffer;
 
@@ -290,13 +401,18 @@ const decodeNiftiVolume = (buffer: ArrayBuffer): DecodedVolume => {
   const width = Number(header.dims[1] ?? 0);
   const height = Number(header.dims[2] ?? 0);
   const depth = Number(header.dims[3] ?? 0);
+  const headerFrameCount = Number(header.dims[4] ?? 1);
+  const frameCount = Number.isFinite(headerFrameCount) && headerFrameCount > 1
+    ? Math.floor(headerFrameCount)
+    : 1;
 
   if (!width || !height || !depth) {
     throw new Error("NIfTI dimensions are invalid for slice visualization.");
   }
 
   const voxelCount = width * height * depth;
-  if (typedData.length < voxelCount * channels) {
+  const valuesPerFrame = voxelCount * channels;
+  if (typedData.length < valuesPerFrame * frameCount) {
     throw new Error("NIfTI data is smaller than expected for volume dimensions.");
   }
 
@@ -306,66 +422,172 @@ const decodeNiftiVolume = (buffer: ArrayBuffer): DecodedVolume => {
       : 1;
   const intercept = channels === 1 && Number.isFinite(header.scl_inter ?? NaN) ? (header.scl_inter as number) : 0;
 
-  let min = Number.POSITIVE_INFINITY;
-  let max = Number.NEGATIVE_INFINITY;
-
-  if (channels === 3) {
-    const rgbData = typedData as Uint8Array;
-    for (let index = 0; index < voxelCount; index += 1) {
-      const value = getRgbIntensity(rgbData, index);
-      if (value < min) min = value;
-      if (value > max) max = value;
-    }
-  } else {
-    for (let index = 0; index < voxelCount; index += 1) {
-      const value = typedData[index] * slope + intercept;
-      if (value < min) min = value;
-      if (value > max) max = value;
-    }
-  }
-
-  if (!Number.isFinite(min) || !Number.isFinite(max)) {
-    throw new Error("Failed to derive value range from NIfTI volume.");
-  }
-
   const pixelsPerSlice = width * height;
-  const range = Math.max(1e-6, max - min);
-  const overlayThreshold = min + range * 0.85;
-  let maxOverlayCoverage = 0;
+  const frameStats: VolumeFrameStats[] = [];
 
-  for (let sliceIndex = 0; sliceIndex < depth; sliceIndex += 1) {
-    const offset = sliceIndex * pixelsPerSlice;
-    let overlayCount = 0;
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+    const frameOffset = frameIndex * voxelCount;
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    let hasFractionalValue = false;
+    let labelValueOverflow = false;
+    const distinctLabelValues = new Set<number>();
 
-    for (let index = 0; index < pixelsPerSlice; index += 1) {
-      const flatIndex = offset + index;
-      const value =
-        channels === 3
-          ? getRgbIntensity(typedData as Uint8Array, flatIndex)
-          : typedData[flatIndex] * slope + intercept;
-      if (value >= overlayThreshold) {
-        overlayCount += 1;
+    if (channels === 3) {
+      const rgbData = typedData as Uint8Array;
+      for (let index = 0; index < voxelCount; index += 1) {
+        const value = getRgbIntensity(rgbData, frameOffset + index);
+        if (value < min) min = value;
+        if (value > max) max = value;
+      }
+    } else {
+      for (let index = 0; index < voxelCount; index += 1) {
+        const value = typedData[frameOffset + index] * slope + intercept;
+        if (value < min) min = value;
+        if (value > max) max = value;
+
+        if (!hasFractionalValue) {
+          const rounded = Math.round(value);
+          const isIntegerLike = Math.abs(value - rounded) <= LABEL_MAP_VALUE_EPSILON;
+
+          if (!isIntegerLike) {
+            hasFractionalValue = true;
+          } else if (rounded > 0 && !labelValueOverflow) {
+            distinctLabelValues.add(rounded);
+            if (distinctLabelValues.size > LABEL_MAP_MAX_DISTINCT_VALUES) {
+              labelValueOverflow = true;
+            }
+          }
+        }
       }
     }
 
-    const coverage = overlayCount / pixelsPerSlice;
-    if (coverage > maxOverlayCoverage) {
-      maxOverlayCoverage = coverage;
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      throw new Error("Failed to derive value range from NIfTI volume.");
     }
+
+    const range = Math.max(1e-6, max - min);
+    const overlayThreshold = min + range * 0.85;
+    const isLikelyLabelMap =
+      channels === 1 &&
+      !hasFractionalValue &&
+      !labelValueOverflow &&
+      distinctLabelValues.size > 0;
+    let displayMin = min;
+    let displayMax = max;
+
+    if (channels === 1 && !isLikelyLabelMap) {
+      const histogram = new Uint32Array(DISPLAY_WINDOW_HISTOGRAM_BINS);
+      for (let index = 0; index < voxelCount; index += 1) {
+        const value = typedData[frameOffset + index] * slope + intercept;
+        const normalized = Math.max(0, Math.min(1, (value - min) / range));
+        const bin = Math.min(
+          DISPLAY_WINDOW_HISTOGRAM_BINS - 1,
+          Math.floor(normalized * (DISPLAY_WINDOW_HISTOGRAM_BINS - 1)),
+        );
+        histogram[bin] += 1;
+      }
+
+      const lower = percentileFromHistogram(histogram, voxelCount, DISPLAY_WINDOW_LOWER_PERCENTILE);
+      const upper = percentileFromHistogram(histogram, voxelCount, DISPLAY_WINDOW_UPPER_PERCENTILE);
+      const lowerValue = min + (lower * range);
+      const upperValue = min + (upper * range);
+
+      if (Number.isFinite(lowerValue) && Number.isFinite(upperValue) && upperValue > lowerValue + 1e-6) {
+        displayMin = lowerValue;
+        displayMax = upperValue;
+      }
+    }
+
+    let explicitMaskValue: number | null = null;
+    if (channels === 1 && !isLikelyLabelMap) {
+      const highValueCounts = new Map<number, number>();
+      const minimumMaskValue = displayMax + EXPLICIT_MASK_MIN_VALUE_GAP;
+
+      for (let index = 0; index < voxelCount; index += 1) {
+        const value = typedData[frameOffset + index] * slope + intercept;
+        if (value < minimumMaskValue) {
+          continue;
+        }
+
+        const rounded = Math.round(value);
+        if (Math.abs(value - rounded) > LABEL_MAP_VALUE_EPSILON || rounded <= 0) {
+          continue;
+        }
+
+        highValueCounts.set(rounded, (highValueCounts.get(rounded) ?? 0) + 1);
+      }
+
+      let bestMaskValue: number | null = null;
+      let bestMaskCount = 0;
+
+      for (const [value, count] of highValueCounts.entries()) {
+        const coverage = count / voxelCount;
+        if (coverage < EXPLICIT_MASK_MIN_COVERAGE || coverage > EXPLICIT_MASK_MAX_COVERAGE) {
+          continue;
+        }
+
+        if (count > bestMaskCount) {
+          bestMaskCount = count;
+          bestMaskValue = value;
+        }
+      }
+
+      explicitMaskValue = bestMaskValue;
+    }
+
+    let maxOverlayCoverage = 0;
+
+    for (let sliceIndex = 0; sliceIndex < depth; sliceIndex += 1) {
+      const sliceOffset = frameOffset + (sliceIndex * pixelsPerSlice);
+      let overlayCount = 0;
+
+      for (let index = 0; index < pixelsPerSlice; index += 1) {
+        const flatIndex = sliceOffset + index;
+        const value =
+          channels === 3
+            ? getRgbIntensity(typedData as Uint8Array, flatIndex)
+            : typedData[flatIndex] * slope + intercept;
+        if (value >= overlayThreshold) {
+          overlayCount += 1;
+        }
+      }
+
+      const coverage = overlayCount / pixelsPerSlice;
+      if (coverage > maxOverlayCoverage) {
+        maxOverlayCoverage = coverage;
+      }
+    }
+
+    frameStats.push({
+      min,
+      max,
+      displayMin,
+      displayMax,
+      overlayThreshold,
+      maxOverlayCoverage,
+      isLikelyLabelMap,
+      explicitMaskValue,
+    });
   }
+
+  const primaryFrameStats = frameStats[0];
 
   return {
     width,
     height,
     depth,
+    frameCount,
+    frameStats,
     data: typedData,
     channels,
     slope,
     intercept,
-    min,
-    max,
-    overlayThreshold,
-    maxOverlayCoverage,
+    min: primaryFrameStats.min,
+    max: primaryFrameStats.max,
+    overlayThreshold: primaryFrameStats.overlayThreshold,
+    maxOverlayCoverage: primaryFrameStats.maxOverlayCoverage,
+    isLikelyLabelMap: primaryFrameStats.isLikelyLabelMap,
   };
 };
 
@@ -376,24 +598,99 @@ type SliceRender = {
   gradCamIntensityScore: number;
 };
 
+const getSliceCountForPlane = (volume: DecodedVolume, viewPlane: ViewPlane): number => {
+  if (viewPlane === "sagittal") {
+    return volume.width;
+  }
+
+  if (viewPlane === "coronal") {
+    return volume.height;
+  }
+
+  return volume.depth;
+};
+
 const renderSlice = (
   volume: DecodedVolume,
   sliceIndex: number,
+  variantId: NiftiVariantId,
+  invertSliceDirection: boolean,
+  viewPlane: ViewPlane,
 ): SliceRender => {
-  const { width, height, data, channels, slope, intercept, min, max, overlayThreshold } = volume;
-  const pixelsPerSlice = width * height;
-  const offset = sliceIndex * pixelsPerSlice;
+  const { width, height, depth, data, channels, slope, intercept } = volume;
+  const frameIndex = resolveVariantFrameIndex(volume, variantId);
+  const frameStats = getVariantFrameStats(volume, variantId);
+  const isSegmentationVariant = variantId === "segmentationRoi";
+  const segmentationFrameIndex = frameIndex;
+  const segmentationFrameStats = frameStats;
+  const baseFrameIndex = isSegmentationVariant
+    ? (segmentationFrameStats.explicitMaskValue !== null
+        ? segmentationFrameIndex
+        : resolveSegmentationBaseFrameIndex(volume, segmentationFrameIndex))
+    : frameIndex;
+  const baseFrameStats = volume.frameStats[baseFrameIndex] ?? frameStats;
+  const { min, max, displayMin, displayMax, overlayThreshold } = baseFrameStats;
+  const sliceCount = getSliceCountForPlane(volume, viewPlane);
+  const clampedSliceIndex = Math.max(0, Math.min(sliceCount - 1, sliceIndex));
+  let renderWidth = width;
+  let renderHeight = height;
+
+  if (viewPlane === "sagittal") {
+    renderWidth = height;
+    renderHeight = depth;
+  } else if (viewPlane === "coronal") {
+    renderWidth = width;
+    renderHeight = depth;
+  }
+
+  const renderPixelsPerSlice = renderWidth * renderHeight;
+  const axialPixelsPerSlice = width * height;
+  const volumeVoxelCount = width * height * volume.depth;
+  const frameOffset = frameIndex * volumeVoxelCount;
+  const baseFrameOffset = baseFrameIndex * volumeVoxelCount;
+  const segmentationFrameOffset = segmentationFrameIndex * volumeVoxelCount;
+  const resolvedSliceIndex = invertSliceDirection
+    ? Math.max(0, sliceCount - 1 - clampedSliceIndex)
+    : clampedSliceIndex;
   const range = Math.max(1e-6, max - min);
-  const imageData = new ImageData(width, height);
+  const displayRange = Math.max(1e-6, displayMax - displayMin);
+  const imageData = new ImageData(renderWidth, renderHeight);
   let overlayCount = 0;
   let normalizedIntensityTotal = 0;
   let gradCamSignalTotal = 0;
   let gradCamActiveCount = 0;
   const gradCamSignalHistogram = new Uint32Array(GRAD_CAM_SIGNAL_HISTOGRAM_BINS);
 
-  for (let index = 0; index < pixelsPerSlice; index += 1) {
-    const flatIndex = offset + index;
-    const pixelIndex = index * 4;
+  const toVolumeVoxelIndex = (index: number): number => {
+    if (viewPlane === "sagittal") {
+      const y = index % height;
+      const z = Math.floor(index / height);
+      const x = resolvedSliceIndex;
+      return (z * axialPixelsPerSlice) + (y * width) + x;
+    }
+
+    if (viewPlane === "coronal") {
+      const x = index % width;
+      const z = Math.floor(index / width);
+      const y = resolvedSliceIndex;
+      return (z * axialPixelsPerSlice) + (y * width) + x;
+    }
+
+    const x = index % width;
+    const y = Math.floor(index / width);
+    const z = resolvedSliceIndex;
+    return (z * axialPixelsPerSlice) + (y * width) + x;
+  };
+
+  for (let index = 0; index < renderPixelsPerSlice; index += 1) {
+    const voxelIndex = toVolumeVoxelIndex(index);
+    const flatIndex = frameOffset + voxelIndex;
+    const baseFlatIndex = baseFrameOffset + voxelIndex;
+    const segmentationFlatIndex = segmentationFrameOffset + voxelIndex;
+    const x = index % renderWidth;
+    const y = Math.floor(index / renderWidth);
+    const flippedY = renderHeight - 1 - y;
+    const pixelIndex = ((flippedY * renderWidth) + x) * 4;
 
     if (channels === 3) {
       const rgbData = data as Uint8Array;
@@ -427,9 +724,44 @@ const renderSlice = (
     }
 
     const value = data[flatIndex] * slope + intercept;
-    const normalized = Math.max(0, Math.min(1, (value - min) / range));
+    const baseValue = data[baseFlatIndex] * slope + intercept;
+    const maskValue = data[segmentationFlatIndex] * slope + intercept;
+    const normalized = Math.max(0, Math.min(1, (baseValue - displayMin) / displayRange));
     normalizedIntensityTotal += normalized;
     const grayscale = Math.round(normalized * 255);
+
+    const roundedValue = Math.round(maskValue);
+    const isLabelVoxel =
+      segmentationFrameStats.isLikelyLabelMap &&
+      roundedValue > 0 &&
+      Math.abs(maskValue - roundedValue) <= LABEL_MAP_VALUE_EPSILON;
+
+    if (isLabelVoxel) {
+      const [red, green, blue] = getSegmentationLabelColor(roundedValue);
+      const strength = variantId === "segmentationRoi" ? 0.92 : 0.84;
+      overlayCount += 1;
+
+      imageData.data[pixelIndex] = blendChannel(grayscale, red, strength);
+      imageData.data[pixelIndex + 1] = blendChannel(grayscale, green, strength);
+      imageData.data[pixelIndex + 2] = blendChannel(grayscale, blue, strength);
+      imageData.data[pixelIndex + 3] = 255;
+      continue;
+    }
+
+    const isExplicitMaskVoxel =
+      isSegmentationVariant &&
+      segmentationFrameStats.explicitMaskValue !== null &&
+      Math.abs(maskValue - segmentationFrameStats.explicitMaskValue) <= LABEL_MAP_VALUE_EPSILON;
+
+    if (isExplicitMaskVoxel) {
+      overlayCount += 1;
+
+      imageData.data[pixelIndex] = blendChannel(grayscale, 244, 0.9);
+      imageData.data[pixelIndex + 1] = blendChannel(grayscale, 63, 0.9);
+      imageData.data[pixelIndex + 2] = blendChannel(grayscale, 94, 0.9);
+      imageData.data[pixelIndex + 3] = 255;
+      continue;
+    }
 
     if (value >= overlayThreshold) {
       overlayCount += 1;
@@ -441,9 +773,9 @@ const renderSlice = (
     imageData.data[pixelIndex + 3] = 255;
   }
 
-  const overlayCoverage = overlayCount / pixelsPerSlice;
-  const meanNormalizedIntensity = normalizedIntensityTotal / pixelsPerSlice;
-  const gradCamActiveRatio = gradCamActiveCount / pixelsPerSlice;
+  const overlayCoverage = overlayCount / renderPixelsPerSlice;
+  const meanNormalizedIntensity = normalizedIntensityTotal / renderPixelsPerSlice;
+  const gradCamActiveRatio = gradCamActiveCount / renderPixelsPerSlice;
   const gradCamActiveMean = gradCamActiveCount > 0 ? gradCamSignalTotal / gradCamActiveCount : 0;
   const gradCamActivePercentile = percentileFromHistogram(
     gradCamSignalHistogram,
@@ -642,6 +974,8 @@ export function NiftiStorageVisualization({
   plotFilePath,
   signedFileUrl,
   variantId = "normalCt",
+  invertSliceDirection = true,
+  viewPlane = "axial",
   prefetchTargets = [],
   labels,
 }: Props) {
@@ -671,7 +1005,8 @@ export function NiftiStorageVisualization({
         }
 
         setVolume(decodedVolume);
-        setCurrentSliceIndex(Math.floor(decodedVolume.depth / 2));
+        const initialSliceCount = getSliceCountForPlane(decodedVolume, viewPlane);
+        setCurrentSliceIndex(Math.floor(initialSliceCount / 2));
         setSliceMetrics(null);
         sliceCacheRef.current.clear();
       } catch (error) {
@@ -731,6 +1066,20 @@ export function NiftiStorageVisualization({
   }, [plotFilePath, signedFileUrl, prefetchTargets]);
 
   useEffect(() => {
+    sliceCacheRef.current.clear();
+    setSliceMetrics(null);
+  }, [variantId, invertSliceDirection, viewPlane]);
+
+  useEffect(() => {
+    if (!volume) {
+      return;
+    }
+
+    const sliceCount = getSliceCountForPlane(volume, viewPlane);
+    setCurrentSliceIndex(Math.floor(sliceCount / 2));
+  }, [volume, viewPlane]);
+
+  useEffect(() => {
     if (!volume || !canvasRef.current) {
       return;
     }
@@ -774,7 +1123,7 @@ export function NiftiStorageVisualization({
       }
 
       try {
-        const rendered = renderSlice(volume, currentSliceIndex);
+        const rendered = renderSlice(volume, currentSliceIndex, variantId, invertSliceDirection, viewPlane);
         drawSliceToCanvas(canvasRef.current, rendered.imageData);
         if (token !== renderTokenRef.current) {
           return;
@@ -804,14 +1153,18 @@ export function NiftiStorageVisualization({
         renderFrameRef.current = null;
       }
     };
-  }, [volume, currentSliceIndex]);
+  }, [volume, currentSliceIndex, variantId, invertSliceDirection, viewPlane]);
 
   const hasRenderedSlice = Boolean(
     sliceMetrics && sliceMetrics.sliceIndex === currentSliceIndex,
   );
   const showOverlayMetric = variantId === "segmentationRoi";
   const showGradCamIntensity = variantId === "gradCam";
-  const maxOverlayCoverage = volume?.maxOverlayCoverage ?? 0;
+  const variantFrameStats = volume ? getVariantFrameStats(volume, variantId) : null;
+  const maxOverlayCoverage = viewPlane === "axial" ? (variantFrameStats?.maxOverlayCoverage ?? 0) : 0;
+  const planeSliceCount = volume ? getSliceCountForPlane(volume, viewPlane) : 1;
+  const maxSliceIndex = Math.max(0, planeSliceCount - 1);
+  const sliderSliceIndex = Math.min(currentSliceIndex, maxSliceIndex);
   const overlayLabel = hasRenderedSlice
     ? (sliceMetrics?.hasOverlay ? labels.detected : labels.none)
     : "...";
@@ -880,8 +1233,8 @@ export function NiftiStorageVisualization({
           <input
             type="range"
             min={0}
-            max={Math.max(0, volume.depth - 1)}
-            value={currentSliceIndex}
+            max={maxSliceIndex}
+            value={sliderSliceIndex}
             onChange={(event) => setCurrentSliceIndex(Number(event.target.value))}
             className="viz-range h-8 w-full cursor-pointer"
             aria-label={labels.sliceSelector}
@@ -889,7 +1242,7 @@ export function NiftiStorageVisualization({
 
           <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
             <span>
-              {labels.slice} {currentSliceIndex} / {Math.max(0, volume.depth - 1)}
+              {labels.slice} {sliderSliceIndex} / {maxSliceIndex}
             </span>
             {showOverlayMetric ? (
               <span>
