@@ -974,7 +974,7 @@ export function NiftiStorageVisualization({
   plotFilePath,
   signedFileUrl,
   variantId = "normalCt",
-  invertSliceDirection = true,
+  invertSliceDirection = false,
   viewPlane = "axial",
   prefetchTargets = [],
   labels,
