@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as nifti from "nifti-reader-js";
 import { createClient } from "@/utils/supabase/client";
+import { Slider } from "@/components/ui/slider";
 
 type NumericView =
   | Int8Array
@@ -1229,18 +1230,17 @@ export function NiftiStorageVisualization({
           className="h-auto w-full rounded-md border border-zinc-200 bg-zinc-50 object-contain dark:border-zinc-700 dark:bg-zinc-900"
         />
 
-        <div className="mt-3 space-y-2">
-          <input
-            type="range"
+        <div className="mt-6 space-y-6">
+          <Slider
             min={0}
             max={maxSliceIndex}
-            value={sliderSliceIndex}
-            onChange={(event) => setCurrentSliceIndex(Number(event.target.value))}
-            className="viz-range h-8 w-full cursor-pointer"
+            step={1}
+            value={[sliderSliceIndex]}
+            onValueChange={([val]) => setCurrentSliceIndex(val)}
             aria-label={labels.sliceSelector}
           />
 
-          <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+          <div className="flex items-center justify-between text-sm text-zinc-500 dark:text-zinc-400">
             <span>
               {labels.slice} {sliderSliceIndex} / {maxSliceIndex}
             </span>

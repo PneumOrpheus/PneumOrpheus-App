@@ -1,3 +1,6 @@
+import privacyPolicyEn from "@/lib/content/privacy-policy-en";
+import privacyPolicyNo from "@/lib/content/privacy-policy-no";
+
 export const LANG_COOKIE_NAME = "app_lang";
 
 export type AppLanguage = "en" | "no";
@@ -161,7 +164,7 @@ const translations = {
       none: "None",
       loadingNifti: "Loading volume...",
       failedNifti: "Could not render the uploaded volume.",
-      niftiVariantTitle: "Visualization source",
+      niftiVariantTitle: "Visualization Source",
       niftiVariantDescription: "Choose which processed volume to render.",
       normalCtLabel: "Standard CT",
       normalCtDescription: "Rendered CT volume without additional overlays.",
@@ -169,7 +172,7 @@ const translations = {
       gradCamDescription: "Rendered CT volume with embedded Grad-CAM activation, showing areas the AI has focused on.",
       segmentationRoiLabel: "Segmentation ROI",
       segmentationRoiDescription: "Rendered CT volume with segmentation region overlays.",
-      viewOptionsTitle: "View options",
+      viewOptionsTitle: "View Options",
       viewOptionsDescription: "Adjust how slice navigation direction is applied across all visualization variants.",
       invertSliceIndexLabel: "Invert slice index",
       sliceIndexInvertedLabel: "Slice index inverted",
@@ -208,6 +211,9 @@ const translations = {
       quote:
         "\"Designed for faster interpretation, clearer report review, and reliable patient follow-up.\"",
       policy: "By continuing, you agree to the clinical data handling policy.",
+      policyLinkText: "clinical data handling policy",
+      policyDialogTitle: "PneumOrpheus Clinical Data Handling Policy",
+      policyDialogContent: privacyPolicyEn,
     },
   },
   no: {
@@ -409,6 +415,9 @@ const translations = {
       heroLine2: "for kliniske kreftarbeidsflyter.",
       quote: "\"Utformet for raskere tolkning, tydeligere rapportgjennomgang og pålitelig pasientoppfølging.\"",
       policy: "Ved å fortsette godtar du policyen for håndtering av kliniske data.",
+      policyLinkText: "policyen for håndtering av kliniske data",
+      policyDialogTitle: "PneumOrpheus retningslinjer for håndtering av kliniske data",
+      policyDialogContent: privacyPolicyNo,
     },
   },
 } as const;
