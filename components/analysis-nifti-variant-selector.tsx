@@ -167,9 +167,9 @@ export function AnalysisNiftiVariantSelector({
                     size="sm"
                     onClick={() => setViewPlane(plane.id)}
                     className={cn(
-                      "w-full border-brand/50",
+                      "w-full p-6 border-brand/50",
                       isActive
-                        ? "bg-brand text-white hover:bg-third hover:text-white text-lg"
+                        ? "bg-brand text-white hover:bg-third hover:text-white dark:bg-white/[0.95] dark:text-zinc-900 dark:hover:bg-white text-lg"
                         : "text-brand hover:bg-brand/10 dark:text-fourth dark:hover:bg-brand/20 text-lg",
                     )}
                   >
@@ -186,9 +186,9 @@ export function AnalysisNiftiVariantSelector({
             size="sm"
             onClick={() => setInvertSliceDirection((previous) => !previous)}
             className={cn(
-              "mt-3 w-full border-brand/50",
+              "mt-8 w-full p-6 border-brand/50",
               invertSliceDirection
-                ? "bg-brand text-white hover:bg-third hover:text-white text-lg"
+                ? "bg-brand text-white hover:bg-third hover:text-white dark:bg-white/[0.95] dark:text-zinc-900 dark:hover:bg-white text-lg"
                 : "text-brand hover:bg-brand/10 dark:text-fourth dark:hover:bg-brand/20 text-lg",
             )}
           >
