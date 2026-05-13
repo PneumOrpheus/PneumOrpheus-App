@@ -8,7 +8,7 @@ import {
 } from "@/lib/analysis-localization";
 import { NextResponse } from "next/server";
 
-const MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024;
+const MAX_UPLOAD_SIZE_BYTES = 500 * 1024 * 1024;
 const MAX_INFERENCE_DURATION_MS = 120_000;
 
 type AnalysisStatus = "Completed" | "In Review";
@@ -494,7 +494,7 @@ export async function POST(request: Request) {
 
     if (studyFile.size > MAX_UPLOAD_SIZE_BYTES) {
       return NextResponse.json(
-        { error: "File is too large. Maximum allowed size is 25 MB." },
+        { error: "File is too large. Maximum allowed size is 500 MB." },
         { status: 400 },
       );
     }

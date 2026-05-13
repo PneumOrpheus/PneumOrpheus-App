@@ -1,5 +1,6 @@
 import AuthFloatingLogo from "@/components/auth-floating-logo";
 import AuthTwoLineTypewriter from "@/components/auth-two-line-typewriter";
+import { PrivacyPolicyDialog } from "@/components/privacy-policy-dialog";
 import { getServerI18n } from "@/lib/server-i18n";
 import { Prompt } from "next/font/google";
 
@@ -40,9 +41,13 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
       <div className="flex items-center justify-center bg-white p-6 dark:bg-zinc-950 sm:p-10">
         <div className="w-full max-w-sm">
           {children}
-          <p className="mt-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
-            {t.auth.policy}
-          </p>
+          <PrivacyPolicyDialog
+            policyText={t.auth.policy}
+            triggerText={t.auth.policyLinkText}
+            linkText={t.auth.policyLinkText}
+            title={t.auth.policyDialogTitle}
+            content={t.auth.policyDialogContent}
+          />
         </div>
       </div>
     </section>

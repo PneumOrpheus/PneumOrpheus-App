@@ -30,7 +30,7 @@ import { useLanguage } from "@/components/language-provider";
 import { cn } from "@/lib/utils";
 
 const MAX_BATCH_FILES = 10;
-const MAX_UPLOAD_SIZE_BYTES = 25 * 1024 * 1024;
+const MAX_UPLOAD_SIZE_BYTES = 500 * 1024 * 1024;
 
 type BatchItemStatus = "pending" | "processing" | "completed" | "failed";
 

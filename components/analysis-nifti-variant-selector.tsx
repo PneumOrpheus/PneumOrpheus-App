@@ -52,7 +52,7 @@ export function AnalysisNiftiVariantSelector({
   selectorDescription,
 }: Props) {
   const [selectedOptionId, setSelectedOptionId] = useState<string>(options[0]?.id ?? "");
-  const [invertSliceDirection, setInvertSliceDirection] = useState(true);
+  const [invertSliceDirection, setInvertSliceDirection] = useState(false);
   const [viewPlane, setViewPlane] = useState<ViewPlane>("axial");
 
   const selectedOption = useMemo(
@@ -126,7 +126,7 @@ export function AnalysisNiftiVariantSelector({
         </RadioGroup>
       </section>
 
-      <div className="relative md:pr-[276px]">
+      <div>
         <NiftiStorageVisualization
           plotFilePath={selectedOption.plotFilePath}
           signedFileUrl={selectedOption.signedFileUrl}
@@ -137,7 +137,7 @@ export function AnalysisNiftiVariantSelector({
           labels={labels}
         />
 
-        <section className="mt-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700 md:absolute md:left-full md:top-0 md:ml-4 md:mt-0 md:w-[260px]">
+        <section className="mt-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
           <div className="space-y-1">
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               {labels.viewOptionsTitle ?? "View options"}
@@ -167,9 +167,9 @@ export function AnalysisNiftiVariantSelector({
                     size="sm"
                     onClick={() => setViewPlane(plane.id)}
                     className={cn(
-                      "w-full border-brand/50",
+                      "w-full p-6 border-brand/50",
                       isActive
-                        ? "bg-brand text-white hover:bg-third hover:text-white text-lg"
+                        ? "bg-brand text-white hover:bg-third hover:text-white dark:bg-white/[0.95] dark:text-zinc-900 dark:hover:bg-white text-lg"
                         : "text-brand hover:bg-brand/10 dark:text-fourth dark:hover:bg-brand/20 text-lg",
                     )}
                   >
@@ -186,9 +186,9 @@ export function AnalysisNiftiVariantSelector({
             size="sm"
             onClick={() => setInvertSliceDirection((previous) => !previous)}
             className={cn(
-              "mt-3 w-full border-brand/50",
+              "mt-8 w-full p-6 border-brand/50",
               invertSliceDirection
-                ? "bg-brand text-white hover:bg-third hover:text-white text-lg"
+                ? "bg-brand text-white hover:bg-third hover:text-white dark:bg-white/[0.95] dark:text-zinc-900 dark:hover:bg-white text-lg"
                 : "text-brand hover:bg-brand/10 dark:text-fourth dark:hover:bg-brand/20 text-lg",
             )}
           >
