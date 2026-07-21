@@ -13,25 +13,27 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const ownedOrShared = `user_id.eq.${user?.id ?? ""},is_shared.eq.true`;
+
   const [patientsCountResult, reportsCountResult, completedCountResult, latestReportResult, clinicianResult] =
     await Promise.all([
       supabase
         .from("patients")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", user?.id ?? ""),
+        .or(ownedOrShared),
       supabase
         .from("analyses")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", user?.id ?? ""),
+        .or(ownedOrShared),
       supabase
         .from("analyses")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", user?.id ?? "")
+        .or(ownedOrShared)
         .eq("status", "Completed"),
       supabase
         .from("analyses")
         .select("id")
-        .eq("user_id", user?.id ?? "")
+        .or(ownedOrShared)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),

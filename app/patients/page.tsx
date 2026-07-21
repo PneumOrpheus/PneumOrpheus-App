@@ -33,16 +33,18 @@ export default async function PatientsPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const ownedOrShared = `user_id.eq.${user?.id ?? ""},is_shared.eq.true`;
+
   const [patientsResult, analysesResult] = await Promise.all([
     supabase
       .from("patients")
       .select("id, name, age, sex, clinician_email, recent_analysis_ids")
-      .eq("user_id", user?.id ?? "")
+      .or(ownedOrShared)
       .order("created_at", { ascending: false }),
     supabase
       .from("analyses")
       .select("id, patient_id, findings, created_at, modality, status, study_file_name")
-      .eq("user_id", user?.id ?? "")
+      .or(ownedOrShared)
       .order("created_at", { ascending: false }),
   ]);
 
