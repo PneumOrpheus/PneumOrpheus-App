@@ -291,6 +291,7 @@ insert into public.clinicians (id, email)
 select distinct p.user_id, p.clinician_email
 from public.patients as p
 where p.clinician_email is not null
+  and p.user_id is not null
 on conflict (id) do update
 set email = excluded.email;
 
@@ -298,6 +299,7 @@ insert into public.clinicians (id, email)
 select distinct a.user_id, a.clinician_email
 from public.analyses as a
 where a.clinician_email is not null
+  and a.user_id is not null
 on conflict (id) do update
 set email = excluded.email;
 
@@ -368,6 +370,40 @@ create index if not exists idx_patients_user_id on public.patients(user_id);
 create index if not exists idx_analyses_user_id on public.analyses(user_id);
 create index if not exists idx_analyses_user_id_created_at on public.analyses(user_id, created_at desc);
 create index if not exists idx_analyses_patient_id on public.analyses(patient_id);
+
+-- Shared, static reference records (e.g. the "Ola Nordmann" demo patient) are
+-- visible to every clinician. They are not owned by any individual user
+-- (user_id is null), which is what keeps them out of reach of the ordinary
+-- write policies below, all of which require auth.uid() = user_id.
+alter table public.patients add column if not exists is_shared boolean not null default false;
+alter table public.analyses add column if not exists is_shared boolean not null default false;
+
+alter table public.patients alter column user_id drop not null;
+alter table public.analyses alter column user_id drop not null;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'patients_shared_user_id_check'
+      and conrelid = 'public.patients'::regclass
+  ) then
+    alter table public.patients
+      add constraint patients_shared_user_id_check
+      check ((is_shared and user_id is null) or (not is_shared and user_id is not null));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'analyses_shared_user_id_check'
+      and conrelid = 'public.analyses'::regclass
+  ) then
+    alter table public.analyses
+      add constraint analyses_shared_user_id_check
+      check ((is_shared and user_id is null) or (not is_shared and user_id is not null));
+  end if;
+end
+$$;
 
 create or replace function public.handle_updated_at()
 returns trigger
@@ -493,6 +529,14 @@ declare
   current_clinician_email text;
   current_clinician_name text;
 begin
+  if exists (select 1 from public.patients where id = p_patient_id and is_shared) then
+    raise exception 'Cannot modify the shared demo patient record';
+  end if;
+
+  if exists (select 1 from public.analyses where id = p_analysis_id and is_shared) then
+    raise exception 'Cannot modify the shared demo analysis record';
+  end if;
+
   if auth.uid() is null then
     raise exception 'Unauthorized';
   end if;
@@ -705,7 +749,7 @@ drop policy if exists "patients_select_own" on public.patients;
 create policy "patients_select_own"
 on public.patients
 for select
-using (auth.uid() = user_id);
+using (auth.uid() = user_id or is_shared);
 
 drop policy if exists "patients_insert_own" on public.patients;
 create policy "patients_insert_own"
@@ -730,7 +774,7 @@ drop policy if exists "analyses_select_own" on public.analyses;
 create policy "analyses_select_own"
 on public.analyses
 for select
-using (auth.uid() = user_id);
+using (auth.uid() = user_id or is_shared);
 
 drop policy if exists "analyses_insert_own" on public.analyses;
 create policy "analyses_insert_own"
@@ -773,7 +817,7 @@ using (
     or exists (
       select 1
       from public.analyses as a
-      where a.user_id = auth.uid()
+      where (a.user_id = auth.uid() or a.is_shared)
         and (
           a.study_file_path = storage.objects.name
           or a.study_file_path = 'study-files/' || storage.objects.name
@@ -807,3 +851,77 @@ on storage.objects
 for delete
 to authenticated
 using (bucket_id = 'study-files' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- Static, shared "Ola Nordmann" demo patient + analysis. Visible to every
+-- clinician (see the "or is_shared" select policies above), owned by no one
+-- (user_id is null), and therefore unreachable by every insert/update/delete
+-- policy, which all require auth.uid() = user_id.
+insert into public.patients (
+  id,
+  user_id,
+  clinician_email,
+  name,
+  age,
+  sex,
+  recent_analysis_ids,
+  is_shared,
+  created_at
+)
+values (
+  'P-DEMO-01',
+  null,
+  'system@pneumorpheus.app',
+  'Ola Nordmann',
+  45,
+  'Male',
+  array['A-DEMO-01']::text[],
+  true,
+  '2024-01-01T00:00:00Z'::timestamptz
+)
+on conflict (id) do update
+set
+  user_id = null,
+  clinician_email = excluded.clinician_email,
+  name = excluded.name,
+  age = excluded.age,
+  sex = excluded.sex,
+  recent_analysis_ids = excluded.recent_analysis_ids,
+  is_shared = true;
+
+insert into public.analyses (
+  id,
+  user_id,
+  clinician_email,
+  patient_id,
+  patient_name,
+  created_at,
+  modality,
+  status,
+  findings,
+  classifications,
+  is_shared
+)
+values (
+  'A-DEMO-01',
+  null,
+  'system@pneumorpheus.app',
+  'P-DEMO-01',
+  'Ola Nordmann',
+  '2024-01-01T00:00:00Z'::timestamptz,
+  'CT Chest'::public.analysis_modality,
+  'Completed'::public.analysis_status,
+  'Example report included by default for every clinician account. Imaging shows no suspicious pulmonary nodules or masses; findings are within normal limits. This entry is static and cannot be edited or deleted.'::text,
+  '[{"side":"Right","prediction":"Benign","confidence":0.98,"explanation":"No suspicious nodules identified. Static example classification shown for reference only."}]'::jsonb,
+  true
+)
+on conflict (id) do update
+set
+  user_id = null,
+  clinician_email = excluded.clinician_email,
+  patient_id = excluded.patient_id,
+  patient_name = excluded.patient_name,
+  modality = excluded.modality,
+  status = excluded.status,
+  findings = excluded.findings,
+  classifications = excluded.classifications,
+  is_shared = true;
