@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { AnalysisEditableFieldsForm } from "@/components/analysis-editable-fields-form";
+import { AnalysisProcessingWatcher } from "@/components/analysis-processing-watcher";
 import { AnalysisVisualization } from "@/components/analysis-visualization";
 import {
   AnalysisNiftiVariantSelector,
@@ -54,6 +55,7 @@ type AnalysisRow = {
   reasoning: LocalizedTextValue | null;
   proposed_tnm_stage: LocalizedTextValue | null;
   is_shared: boolean;
+  updated_at: string;
 };
 
 type VisualizationSlice = {
@@ -247,7 +249,7 @@ export default async function AnalysisDetailPage({
   const { data: analysisData } = await supabase
     .from("analyses")
     .select(
-      "id, patient_id, patient_name, created_at, modality, status, findings, classifications, study_file_path, study_file_name, study_file_size_bytes, study_file_mime_type, grad_cam_study_file_path, grad_cam_study_file_name, grad_cam_study_file_size_bytes, grad_cam_study_file_mime_type, segmentation_roi_study_file_path, segmentation_roi_study_file_name, segmentation_roi_study_file_size_bytes, segmentation_roi_study_file_mime_type, visualization_data, cancer_type, classification_confidence, reasoning, proposed_tnm_stage, is_shared",
+      "id, patient_id, patient_name, created_at, modality, status, findings, classifications, study_file_path, study_file_name, study_file_size_bytes, study_file_mime_type, grad_cam_study_file_path, grad_cam_study_file_name, grad_cam_study_file_size_bytes, grad_cam_study_file_mime_type, segmentation_roi_study_file_path, segmentation_roi_study_file_name, segmentation_roi_study_file_size_bytes, segmentation_roi_study_file_mime_type, visualization_data, cancer_type, classification_confidence, reasoning, proposed_tnm_stage, is_shared, updated_at",
     )
     .eq("id", id)
     .or(ownedOrShared)
@@ -482,6 +484,7 @@ export default async function AnalysisDetailPage({
 
   return (
     <section className="mx-auto max-w-5xl space-y-6">
+      <AnalysisProcessingWatcher analysisId={analysis.id} status={analysis.status} />
       <Card className="relative overflow-hidden rounded-2xl border border-brand/20 bg-gradient-to-br from-brand via-third to-fifth text-white shadow-sm">
         <CardHeader>
           <p className="text-sm text-white/80">{localizedCreatedAt}</p>
@@ -507,7 +510,7 @@ export default async function AnalysisDetailPage({
           </CardHeader>
           <CardContent>
             <AnalysisEditableFieldsForm
-              key={`${id}-${language}`}
+              key={`${id}-${language}-${analysis.updated_at}`}
               initialFindings={editableFindingsValue}
               initialReasoning={editableReasoningValue}
               initialCancerType={editableCancerTypeValue}

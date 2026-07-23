@@ -3,7 +3,7 @@ create extension if not exists pgcrypto;
 do $$
 begin
   if not exists (select 1 from pg_type where typname = 'analysis_status') then
-    create type public.analysis_status as enum ('Completed', 'In Review');
+    create type public.analysis_status as enum ('Completed', 'In Review', 'Processing', 'Failed');
   end if;
 
   if not exists (select 1 from pg_type where typname = 'analysis_modality') then
@@ -15,6 +15,10 @@ begin
   end if;
 end
 $$;
+
+-- Async job-polling pattern
+alter type public.analysis_status add value if not exists 'Processing';
+alter type public.analysis_status add value if not exists 'Failed';
 
 create table if not exists public.clinicians (
   id uuid primary key references auth.users(id) on delete cascade,

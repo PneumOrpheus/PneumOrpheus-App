@@ -31,6 +31,8 @@ import { cn } from "@/lib/utils";
 
 const MAX_BATCH_FILES = 10;
 const MAX_UPLOAD_SIZE_BYTES = 500 * 1024 * 1024;
+const POLL_INTERVAL_MS = 5_000;
+const MAX_POLL_ATTEMPTS = 240;
 
 type BatchItemStatus = "pending" | "processing" | "completed" | "failed";
 
@@ -39,6 +41,37 @@ type BatchItem = {
   status: BatchItemStatus;
   analysisId?: string;
   error?: string;
+};
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const pollAnalysisUntilTerminal = async (
+  analysisId: string,
+  fallbackErrorMessage: string,
+): Promise<{ status: "completed" | "failed"; error?: string }> => {
+  for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
+    await sleep(POLL_INTERVAL_MS);
+
+    try {
+      const response = await fetch(`/api/reports/${analysisId}/poll`, { cache: "no-store" });
+      const result = (await response.json().catch(() => null)) as { status?: string; error?: string } | null;
+
+      if (!response.ok) {
+        return { status: "failed", error: result?.error ?? fallbackErrorMessage };
+      }
+
+      if (result?.status && result.status !== "Processing") {
+        return {
+          status: result.status === "Failed" ? "failed" : "completed",
+          error: result.error,
+        };
+      }
+    } catch {
+      // Transient network error talking to our own API. Keep polling.
+    }
+  }
+
+  return { status: "failed", error: fallbackErrorMessage };
 };
 
 export default function UploadPage() {
@@ -224,17 +257,25 @@ export default function UploadPage() {
                     status: "failed",
                     error: result?.error ?? t.upload.submitError,
                   });
+                  router.refresh();
+                  continue;
+                }
+
+                updateBatchItem(index, { status: "processing", analysisId: result.id, error: undefined });
+                router.refresh();
+
+                const outcome = await pollAnalysisUntilTerminal(result.id, t.upload.submitError);
+
+                if (outcome.status === "failed") {
+                  failedCountLocal += 1;
+                  updateBatchItem(index, { status: "failed", error: outcome.error ?? t.upload.submitError });
                 } else {
                   if (!firstSuccessfulAnalysisId) {
                     firstSuccessfulAnalysisId = result.id;
                   }
 
                   successfulCount += 1;
-                  updateBatchItem(index, {
-                    status: "completed",
-                    analysisId: result.id,
-                    error: undefined,
-                  });
+                  updateBatchItem(index, { status: "completed", analysisId: result.id, error: undefined });
                 }
               } catch (error) {
                 failedCountLocal += 1;
