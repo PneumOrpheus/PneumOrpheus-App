@@ -9,7 +9,7 @@ import {
 import { NextResponse } from "next/server";
 
 const MAX_UPLOAD_SIZE_BYTES = 500 * 1024 * 1024;
-const MAX_INFERENCE_DURATION_MS = 120_000;
+const MAX_INFERENCE_DURATION_MS = 300_000;
 
 type AnalysisStatus = "Completed" | "In Review";
 
@@ -39,6 +39,9 @@ type NormalizedInferenceResult = {
   segmentationRoiPlotFileName: string | null;
   segmentationRoiPlotFileSizeBytes: number | null;
   segmentationRoiPlotFileMimeType: string | null;
+  plainCtFile: NiftiFileBlob | null;
+  gradCamFile: NiftiFileBlob | null;
+  segmentationRoiFile: NiftiFileBlob | null;
   visualizationData: InferenceRecord | null;
   cancerType: string | null;
   classificationConfidence: number | null;
@@ -89,6 +92,23 @@ const asObject = (value: unknown): InferenceRecord | null => {
   }
 
   return value as InferenceRecord;
+};
+
+type NiftiFileBlob = { filename: string; mimeType: string; sizeBytes: number; base64Data: string };
+
+const parseNiftiFileBlob = (value: unknown): NiftiFileBlob | null => {
+  const obj = asObject(value);
+  const base64Data = asString(obj?.base64Data);
+  if (!base64Data) {
+    return null;
+  }
+
+  return {
+    filename: asString(obj?.filename) ?? "file.nii.gz",
+    mimeType: asString(obj?.mimeType) ?? "application/gzip",
+    sizeBytes: asNumber(obj?.sizeBytes) ?? 0,
+    base64Data,
+  };
 };
 
 const inferFileNameFromPath = (value: string | null): string | null => {
@@ -393,6 +413,11 @@ const normalizeInferenceResult = (payload: unknown): NormalizedInferenceResult =
   );
   const visualizationData = extractVisualizationData(data);
 
+  const niftiFiles = asObject(asObject(getFirstDefinedValue(data, ["segmentationData"]))?.niftiFiles);
+  const plainCtFile = parseNiftiFileBlob(niftiFiles?.plainCt);
+  const gradCamFile = parseNiftiFileBlob(niftiFiles?.gradCam);
+  const segmentationRoiFile = parseNiftiFileBlob(niftiFiles?.segmentationRoi);
+
   const proposedTnmStage = normalizeOptionalLocalizedText(
     getFirstDefinedValue(data, ["proposedTnmStage", "tnmStage"]) ?? getFirstDefinedValue(asObject(data.tnm), ["stage"]),
     getFirstDefinedValue(data, ["proposedTnmStageNo", "proposed_tnm_stage_no", "tnmStageNo", "tnm_stage_no"]) ??
@@ -429,6 +454,7 @@ const normalizeInferenceResult = (payload: unknown): NormalizedInferenceResult =
     Boolean(gradCamPlotFileName) ||
     Boolean(segmentationRoiPlotFilePath) ||
     Boolean(segmentationRoiPlotFileName) ||
+    Boolean(plainCtFile) ||
     Boolean(visualizationData);
 
   return {
@@ -446,6 +472,9 @@ const normalizeInferenceResult = (payload: unknown): NormalizedInferenceResult =
     segmentationRoiPlotFileName,
     segmentationRoiPlotFileSizeBytes,
     segmentationRoiPlotFileMimeType,
+    plainCtFile,
+    gradCamFile,
+    segmentationRoiFile,
     visualizationData,
     cancerType: inferredCancerType,
     classificationConfidence: normalizedConfidence,
@@ -453,6 +482,33 @@ const normalizeInferenceResult = (payload: unknown): NormalizedInferenceResult =
     proposedTnmStage,
     status: hasInferenceOutput ? "Completed" : "In Review",
   };
+};
+
+type UploadedNiftiFile = { path: string; name: string; sizeBytes: number; mimeType: string };
+
+const uploadNiftiFile = async (
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  analysisId: string,
+  file: NiftiFileBlob | null,
+): Promise<UploadedNiftiFile | null> => {
+  if (!file) {
+    return null;
+  }
+
+  const buffer = Buffer.from(file.base64Data, "base64");
+  const objectPath = `${userId}/${analysisId}/${sanitizeFileName(file.filename)}`;
+
+  const { data, error } = await supabase.storage
+    .from("study-files")
+    .upload(objectPath, buffer, { contentType: file.mimeType, upsert: true });
+
+  if (error || !data) {
+    console.error(`Failed to upload ${file.filename} to Storage:`, error);
+    return null;
+  }
+
+  return { path: data.path, name: file.filename, sizeBytes: file.sizeBytes, mimeType: file.mimeType };
 };
 
 export async function POST(request: Request) {
@@ -556,23 +612,31 @@ export async function POST(request: Request) {
     const persistedSegmentationRoiPlotFileName =
       normalizedInference.segmentationRoiPlotFileName ?? inferFileNameFromPath(normalizedInference.segmentationRoiPlotFilePath);
 
+    const [uploadedPlainCt, uploadedGradCam, uploadedSegmentationRoi] = await Promise.all([
+      uploadNiftiFile(supabase, user.id, analysisId, normalizedInference.plainCtFile),
+      uploadNiftiFile(supabase, user.id, analysisId, normalizedInference.gradCamFile),
+      uploadNiftiFile(supabase, user.id, analysisId, normalizedInference.segmentationRoiFile),
+    ]);
+
     const { error: rpcError } = await supabase.rpc("create_analysis_atomic", {
       p_analysis_id: analysisId,
       p_patient_id: patientId,
       p_patient_name: patientName,
       p_modality: modality,
-      p_study_file_path: normalizedInference.plotFilePath,
-      p_study_file_name: persistedPlotFileName,
-      p_study_file_size_bytes: persistedPlotFileSize,
-      p_study_file_mime_type: persistedPlotFileMimeType,
-      p_grad_cam_study_file_path: normalizedInference.gradCamPlotFilePath,
-      p_grad_cam_study_file_name: persistedGradCamPlotFileName,
-      p_grad_cam_study_file_size_bytes: normalizedInference.gradCamPlotFileSizeBytes,
-      p_grad_cam_study_file_mime_type: normalizedInference.gradCamPlotFileMimeType,
-      p_segmentation_roi_study_file_path: normalizedInference.segmentationRoiPlotFilePath,
-      p_segmentation_roi_study_file_name: persistedSegmentationRoiPlotFileName,
-      p_segmentation_roi_study_file_size_bytes: normalizedInference.segmentationRoiPlotFileSizeBytes,
-      p_segmentation_roi_study_file_mime_type: normalizedInference.segmentationRoiPlotFileMimeType,
+      p_study_file_path: uploadedPlainCt?.path ?? normalizedInference.plotFilePath,
+      p_study_file_name: uploadedPlainCt?.name ?? persistedPlotFileName,
+      p_study_file_size_bytes: uploadedPlainCt?.sizeBytes ?? persistedPlotFileSize,
+      p_study_file_mime_type: uploadedPlainCt?.mimeType ?? persistedPlotFileMimeType,
+      p_grad_cam_study_file_path: uploadedGradCam?.path ?? normalizedInference.gradCamPlotFilePath,
+      p_grad_cam_study_file_name: uploadedGradCam?.name ?? persistedGradCamPlotFileName,
+      p_grad_cam_study_file_size_bytes: uploadedGradCam?.sizeBytes ?? normalizedInference.gradCamPlotFileSizeBytes,
+      p_grad_cam_study_file_mime_type: uploadedGradCam?.mimeType ?? normalizedInference.gradCamPlotFileMimeType,
+      p_segmentation_roi_study_file_path: uploadedSegmentationRoi?.path ?? normalizedInference.segmentationRoiPlotFilePath,
+      p_segmentation_roi_study_file_name: uploadedSegmentationRoi?.name ?? persistedSegmentationRoiPlotFileName,
+      p_segmentation_roi_study_file_size_bytes:
+        uploadedSegmentationRoi?.sizeBytes ?? normalizedInference.segmentationRoiPlotFileSizeBytes,
+      p_segmentation_roi_study_file_mime_type:
+        uploadedSegmentationRoi?.mimeType ?? normalizedInference.segmentationRoiPlotFileMimeType,
       p_visualization_data: normalizedInference.visualizationData,
       p_status: normalizedInference.status,
       p_findings: normalizedInference.findings,
