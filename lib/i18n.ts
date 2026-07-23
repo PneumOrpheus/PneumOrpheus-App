@@ -149,6 +149,8 @@ const translations = {
       saveClinicalUpdates: "Save updates",
       setAsCompleted: "Set status to Completed",
       setAsInReview: "Set status to In Review",
+      sharedExampleBadge: "Shared example",
+      sharedExampleNotice: "This is a default example entry shared with every clinician account and cannot be edited or deleted.",
       noClassification:
         "No analysis output available yet. The report is still being processed.",
       noPlotFile: "No plotted volume file available.",
@@ -356,6 +358,8 @@ const translations = {
       saveClinicalUpdates: "Lagre oppdateringer",
       setAsCompleted: "Sett status til fullført",
       setAsInReview: "Sett status som til vurdering",
+      sharedExampleBadge: "Delt eksempel",
+      sharedExampleNotice: "Dette er en standard eksempeloppføring som deles med alle klinikerkontoer, og kan ikke redigeres eller slettes.",
       noClassification: "Ingen analyseresultat tilgjengelig ennå. Rapporten behandles fortsatt.",
       noPlotFile: "Ingen plottet volumfil tilgjengelig.",
       lungSuffix: "lunge",

@@ -53,6 +53,7 @@ type AnalysisRow = {
   classification_confidence: number | null;
   reasoning: LocalizedTextValue | null;
   proposed_tnm_stage: LocalizedTextValue | null;
+  is_shared: boolean;
 };
 
 type VisualizationSlice = {
@@ -241,13 +242,15 @@ export default async function AnalysisDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
+  const ownedOrShared = `user_id.eq.${user?.id ?? ""},is_shared.eq.true`;
+
   const { data: analysisData } = await supabase
     .from("analyses")
     .select(
-      "id, patient_id, patient_name, created_at, modality, status, findings, classifications, study_file_path, study_file_name, study_file_size_bytes, study_file_mime_type, grad_cam_study_file_path, grad_cam_study_file_name, grad_cam_study_file_size_bytes, grad_cam_study_file_mime_type, segmentation_roi_study_file_path, segmentation_roi_study_file_name, segmentation_roi_study_file_size_bytes, segmentation_roi_study_file_mime_type, visualization_data, cancer_type, classification_confidence, reasoning, proposed_tnm_stage",
+      "id, patient_id, patient_name, created_at, modality, status, findings, classifications, study_file_path, study_file_name, study_file_size_bytes, study_file_mime_type, grad_cam_study_file_path, grad_cam_study_file_name, grad_cam_study_file_size_bytes, grad_cam_study_file_mime_type, segmentation_roi_study_file_path, segmentation_roi_study_file_name, segmentation_roi_study_file_size_bytes, segmentation_roi_study_file_mime_type, visualization_data, cancer_type, classification_confidence, reasoning, proposed_tnm_stage, is_shared",
     )
     .eq("id", id)
-    .eq("user_id", user?.id ?? "")
+    .or(ownedOrShared)
     .maybeSingle();
 
   const analysis = analysisData as AnalysisRow | null;
@@ -260,7 +263,7 @@ export default async function AnalysisDetailPage({
     .from("patients")
     .select("name, clinician_email")
     .eq("id", analysis.patient_id)
-    .eq("user_id", user?.id ?? "")
+    .or(ownedOrShared)
     .maybeSingle();
 
   const patient = patientData as PatientRow | null;
@@ -488,6 +491,11 @@ export default async function AnalysisDetailPage({
             <Badge variant="outline" className="border-white/50 bg-white/10 text-white">
               {localizedStatus}
             </Badge>
+            {analysis.is_shared ? (
+              <Badge variant="outline" className="border-white/50 bg-white/10 text-white">
+                {t.analysisDetail.sharedExampleBadge}
+              </Badge>
+            ) : null}
           </p>
         </CardHeader>
       </Card>
@@ -507,6 +515,7 @@ export default async function AnalysisDetailPage({
               classificationConfidence={analysis.classification_confidence}
               noDataLabel={t.common.noData}
               statusToggleButtonLabel={statusToggleButtonLabel}
+              readOnly={analysis.is_shared}
               saveClinicalFieldsAction={saveClinicalFieldsAction}
               toggleStatusAction={toggleStatusAction}
               labels={{
@@ -518,6 +527,7 @@ export default async function AnalysisDetailPage({
                 confidenceAltered: t.analysisDetail.confidenceAltered,
                 editField: t.analysisDetail.editField,
                 saveClinicalUpdates: t.analysisDetail.saveClinicalUpdates,
+                sharedExampleNotice: t.analysisDetail.sharedExampleNotice,
               }}
             />
 

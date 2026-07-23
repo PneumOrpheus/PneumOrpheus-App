@@ -31,7 +31,7 @@ export default async function AnalysesPage() {
   const { data } = await supabase
     .from("analyses")
     .select("id, patient_name, modality, status, created_at, study_file_name, study_file_size_bytes")
-    .eq("user_id", user?.id ?? "")
+    .or(`user_id.eq.${user?.id ?? ""},is_shared.eq.true`)
     .order("created_at", { ascending: false });
 
   const analyses = (data ?? []) as AnalysisRow[];

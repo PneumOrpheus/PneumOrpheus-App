@@ -14,6 +14,7 @@ type EditableFieldLabels = {
   confidenceAltered: string;
   editField: string;
   saveClinicalUpdates: string;
+  sharedExampleNotice: string;
 };
 
 type Props = {
@@ -24,6 +25,7 @@ type Props = {
   classificationConfidence: number | null;
   noDataLabel: string;
   statusToggleButtonLabel: string;
+  readOnly?: boolean;
   labels: EditableFieldLabels;
   saveClinicalFieldsAction: (formData: FormData) => Promise<void>;
   toggleStatusAction: () => Promise<void>;
@@ -46,6 +48,7 @@ export function AnalysisEditableFieldsForm({
   classificationConfidence,
   noDataLabel,
   statusToggleButtonLabel,
+  readOnly = false,
   labels,
   saveClinicalFieldsAction,
   toggleStatusAction,
@@ -97,14 +100,16 @@ export function AnalysisEditableFieldsForm({
                 <dt className="text-zinc-500 dark:text-zinc-400">{labels.findings}</dt>
                 <dd className="mt-1 whitespace-pre-wrap break-words">{findings || noDataLabel}</dd>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleEditor("findings")}
-                aria-label={labels.editField}
-                className="inline-flex shrink-0 items-center rounded-md border border-zinc-300 p-2 text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
-              >
-                <Pencil className="size-4" aria-hidden="true" />
-              </button>
+              {readOnly ? null : (
+                <button
+                  type="button"
+                  onClick={() => toggleEditor("findings")}
+                  aria-label={labels.editField}
+                  className="inline-flex shrink-0 items-center rounded-md border border-zinc-300 p-2 text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
+                >
+                  <Pencil className="size-4" aria-hidden="true" />
+                </button>
+              )}
             </div>
             {openEditors.findings ? (
               <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
@@ -124,14 +129,16 @@ export function AnalysisEditableFieldsForm({
                 <dt className="text-zinc-500 dark:text-zinc-400">{labels.reasoning}</dt>
                 <dd className="mt-1 whitespace-pre-wrap break-words">{reasoning || noDataLabel}</dd>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleEditor("reasoning")}
-                aria-label={labels.editField}
-                className="inline-flex shrink-0 items-center rounded-md border border-zinc-300 p-2 text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
-              >
-                <Pencil className="size-4" aria-hidden="true" />
-              </button>
+              {readOnly ? null : (
+                <button
+                  type="button"
+                  onClick={() => toggleEditor("reasoning")}
+                  aria-label={labels.editField}
+                  className="inline-flex shrink-0 items-center rounded-md border border-zinc-300 p-2 text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
+                >
+                  <Pencil className="size-4" aria-hidden="true" />
+                </button>
+              )}
             </div>
             {openEditors.reasoning ? (
               <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
@@ -151,14 +158,16 @@ export function AnalysisEditableFieldsForm({
                 <dt className="text-zinc-500 dark:text-zinc-400">{labels.predictedCancerType}</dt>
                 <dd className="mt-1 break-words font-medium">{cancerType || noDataLabel}</dd>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleEditor("cancerType")}
-                aria-label={labels.editField}
-                className="inline-flex shrink-0 items-center rounded-md border border-zinc-300 p-2 text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
-              >
-                <Pencil className="size-4" aria-hidden="true" />
-              </button>
+              {readOnly ? null : (
+                <button
+                  type="button"
+                  onClick={() => toggleEditor("cancerType")}
+                  aria-label={labels.editField}
+                  className="inline-flex shrink-0 items-center rounded-md border border-zinc-300 p-2 text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
+                >
+                  <Pencil className="size-4" aria-hidden="true" />
+                </button>
+              )}
             </div>
             {openEditors.cancerType ? (
               <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
@@ -188,14 +197,16 @@ export function AnalysisEditableFieldsForm({
                 <dt className="text-zinc-500 dark:text-zinc-400">{labels.proposedTnm}</dt>
                 <dd className="mt-1 break-words font-medium">{proposedTnmStage || noDataLabel}</dd>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleEditor("proposedTnmStage")}
-                aria-label={labels.editField}
-                className="inline-flex shrink-0 items-center rounded-md border border-zinc-300 p-2 text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
-              >
-                <Pencil className="size-4" aria-hidden="true" />
-              </button>
+              {readOnly ? null : (
+                <button
+                  type="button"
+                  onClick={() => toggleEditor("proposedTnmStage")}
+                  aria-label={labels.editField}
+                  className="inline-flex shrink-0 items-center rounded-md border border-zinc-300 p-2 text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800 cursor-pointer"
+                >
+                  <Pencil className="size-4" aria-hidden="true" />
+                </button>
+              )}
             </div>
             {openEditors.proposedTnmStage ? (
               <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
@@ -211,23 +222,27 @@ export function AnalysisEditableFieldsForm({
       </form>
 
       <div className="mt-6 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <form action={toggleStatusAction}>
-            <Button type="submit" variant="outline" className="text-lg cursor-pointer border-brand/40 text-brand hover:bg-brand/10 hover:text-brand p-6">
-              {statusToggleButtonLabel}
-            </Button>
-          </form>
+        {readOnly ? (
+          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">{labels.sharedExampleNotice}</p>
+        ) : (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <form action={toggleStatusAction}>
+              <Button type="submit" variant="outline" className="text-lg cursor-pointer border-brand/40 text-brand hover:bg-brand/10 hover:text-brand p-6">
+                {statusToggleButtonLabel}
+              </Button>
+            </form>
 
-          <Button
-            type="submit"
-            form={formId}
-            variant="outline"
-            disabled={!canSave}
-            className="text-lg border-brand/40 text-brand hover:bg-brand/10 hover:text-brand p-6 disabled:cursor-not-allowed disabled:border-zinc-300 disabled:text-zinc-400 dark:disabled:border-zinc-700 dark:disabled:text-zinc-500"
-          >
-            {labels.saveClinicalUpdates}
-          </Button>
-        </div>
+            <Button
+              type="submit"
+              form={formId}
+              variant="outline"
+              disabled={!canSave}
+              className="text-lg border-brand/40 text-brand hover:bg-brand/10 hover:text-brand p-6 disabled:cursor-not-allowed disabled:border-zinc-300 disabled:text-zinc-400 dark:disabled:border-zinc-700 dark:disabled:text-zinc-500"
+            >
+              {labels.saveClinicalUpdates}
+            </Button>
+          </div>
+        )}
       </div>
     </>
   );
