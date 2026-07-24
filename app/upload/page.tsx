@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 const MAX_BATCH_FILES = 10;
 const MAX_UPLOAD_SIZE_BYTES = 500 * 1024 * 1024;
+const CHEST_CT_MODALITY_VALUE = "CT Chest";
 const POLL_INTERVAL_MS = 5_000;
 const MAX_POLL_ATTEMPTS = 240;
 
@@ -80,7 +81,7 @@ export default function UploadPage() {
   const [fileError, setFileError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [modality, setModality] = useState("CT Chest");
+  const [modality, setModality] = useState(CHEST_CT_MODALITY_VALUE);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
 
@@ -329,13 +330,13 @@ export default function UploadPage() {
             <input type="hidden" name="modality" value={modality} />
             <Select
               value={modality}
-              onValueChange={(value) => setModality(value ?? t.upload.chestCt)}
+              onValueChange={(value) => setModality(value ?? CHEST_CT_MODALITY_VALUE)}
             >
               <SelectTrigger id="modality" className="h-10 w-full cursor-pointer">
                 <SelectValue placeholder={t.upload.selectModality} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={t.upload.chestCt}>{t.upload.chestCt}</SelectItem>
+                <SelectItem value={CHEST_CT_MODALITY_VALUE}>{t.upload.chestCt}</SelectItem>
               </SelectContent>
             </Select>
           </div>
