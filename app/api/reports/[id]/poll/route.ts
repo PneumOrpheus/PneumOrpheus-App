@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import type { createClient as createClientType } from "@/utils/supabase/server";
 import { inferFileNameFromPath, normalizeInferenceResult, uploadNiftiFile } from "@/lib/inference-normalization";
 import { NextResponse } from "next/server";
 
@@ -6,6 +7,68 @@ import { NextResponse } from "next/server";
 // finish — the job itself keeps running in the background regardless of
 // whether/how often this is polled.
 const POLL_TIMEOUT_MS = 15_000;
+
+// Finalizing a completed job (uploading the NIfTI overlay volumes to
+// Supabase Storage — potentially 1GB+ combined for a large CT once the
+// RGB24 GradCAM/segmentation variants are baked in) can itself run well
+// past Azure's front-end gateway timeout. It must not block this request's
+// response, so it's kicked off detached and tracked here only to stop a
+// second poll arriving mid-finalize from starting a duplicate run — this
+// process is long-lived (standalone Next.js server, not serverless), so
+// work continuing after the response is sent is safe.
+const finalizingAnalysisIds = new Set<string>();
+
+async function finalizeCompletedAnalysis(
+  supabase: Awaited<ReturnType<typeof createClientType>>,
+  userId: string,
+  id: string,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const normalizedInference = normalizeInferenceResult(body);
+
+  const persistedGradCamPlotFileName =
+    normalizedInference.gradCamPlotFileName ?? inferFileNameFromPath(normalizedInference.gradCamPlotFilePath);
+  const persistedSegmentationRoiPlotFileName =
+    normalizedInference.segmentationRoiPlotFileName ?? inferFileNameFromPath(normalizedInference.segmentationRoiPlotFilePath);
+
+  const [uploadedPlainCt, uploadedGradCam, uploadedSegmentationRoi] = await Promise.all([
+    uploadNiftiFile(supabase, userId, id, normalizedInference.plainCtFile),
+    uploadNiftiFile(supabase, userId, id, normalizedInference.gradCamFile),
+    uploadNiftiFile(supabase, userId, id, normalizedInference.segmentationRoiFile),
+  ]);
+
+  await supabase
+    .from("analyses")
+    .update({
+      status: normalizedInference.status,
+      findings: normalizedInference.findings,
+      classifications: normalizedInference.classifications,
+      // Fall back to `undefined` (omitted from the JSON body, so the
+      // placeholder row's original-upload metadata survives) rather than
+      // `null` when the pipeline didn't produce a replacement file.
+      study_file_path: uploadedPlainCt?.path ?? normalizedInference.plotFilePath ?? undefined,
+      study_file_name: uploadedPlainCt?.name ?? normalizedInference.plotFileName ?? undefined,
+      study_file_size_bytes: uploadedPlainCt?.sizeBytes ?? normalizedInference.plotFileSizeBytes ?? undefined,
+      study_file_mime_type: uploadedPlainCt?.mimeType ?? normalizedInference.plotFileMimeType ?? undefined,
+      grad_cam_study_file_path: uploadedGradCam?.path ?? normalizedInference.gradCamPlotFilePath,
+      grad_cam_study_file_name: uploadedGradCam?.name ?? persistedGradCamPlotFileName,
+      grad_cam_study_file_size_bytes: uploadedGradCam?.sizeBytes ?? normalizedInference.gradCamPlotFileSizeBytes,
+      grad_cam_study_file_mime_type: uploadedGradCam?.mimeType ?? normalizedInference.gradCamPlotFileMimeType,
+      segmentation_roi_study_file_path: uploadedSegmentationRoi?.path ?? normalizedInference.segmentationRoiPlotFilePath,
+      segmentation_roi_study_file_name: uploadedSegmentationRoi?.name ?? persistedSegmentationRoiPlotFileName,
+      segmentation_roi_study_file_size_bytes:
+        uploadedSegmentationRoi?.sizeBytes ?? normalizedInference.segmentationRoiPlotFileSizeBytes,
+      segmentation_roi_study_file_mime_type:
+        uploadedSegmentationRoi?.mimeType ?? normalizedInference.segmentationRoiPlotFileMimeType,
+      visualization_data: normalizedInference.visualizationData,
+      cancer_type: normalizedInference.cancerType,
+      classification_confidence: normalizedInference.classificationConfidence,
+      reasoning: normalizedInference.reasoning,
+      proposed_tnm_stage: normalizedInference.proposedTnmStage,
+    })
+    .eq("id", id)
+    .eq("user_id", userId);
+}
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -100,55 +163,26 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ status: "Failed", error: errorMessage });
   }
 
-  // body.status === "completed"
-  const normalizedInference = normalizeInferenceResult(body);
-
-  const persistedGradCamPlotFileName =
-    normalizedInference.gradCamPlotFileName ?? inferFileNameFromPath(normalizedInference.gradCamPlotFilePath);
-  const persistedSegmentationRoiPlotFileName =
-    normalizedInference.segmentationRoiPlotFileName ?? inferFileNameFromPath(normalizedInference.segmentationRoiPlotFilePath);
-
-  const [uploadedPlainCt, uploadedGradCam, uploadedSegmentationRoi] = await Promise.all([
-    uploadNiftiFile(supabase, user.id, id, normalizedInference.plainCtFile),
-    uploadNiftiFile(supabase, user.id, id, normalizedInference.gradCamFile),
-    uploadNiftiFile(supabase, user.id, id, normalizedInference.segmentationRoiFile),
-  ]);
-
-  const { error: updateError } = await supabase
-    .from("analyses")
-    .update({
-      status: normalizedInference.status,
-      findings: normalizedInference.findings,
-      classifications: normalizedInference.classifications,
-      // Fall back to `undefined` (omitted from the JSON body, so the
-      // placeholder row's original-upload metadata survives) rather than
-      // `null` when the pipeline didn't produce a replacement file.
-      study_file_path: uploadedPlainCt?.path ?? normalizedInference.plotFilePath ?? undefined,
-      study_file_name: uploadedPlainCt?.name ?? normalizedInference.plotFileName ?? undefined,
-      study_file_size_bytes: uploadedPlainCt?.sizeBytes ?? normalizedInference.plotFileSizeBytes ?? undefined,
-      study_file_mime_type: uploadedPlainCt?.mimeType ?? normalizedInference.plotFileMimeType ?? undefined,
-      grad_cam_study_file_path: uploadedGradCam?.path ?? normalizedInference.gradCamPlotFilePath,
-      grad_cam_study_file_name: uploadedGradCam?.name ?? persistedGradCamPlotFileName,
-      grad_cam_study_file_size_bytes: uploadedGradCam?.sizeBytes ?? normalizedInference.gradCamPlotFileSizeBytes,
-      grad_cam_study_file_mime_type: uploadedGradCam?.mimeType ?? normalizedInference.gradCamPlotFileMimeType,
-      segmentation_roi_study_file_path: uploadedSegmentationRoi?.path ?? normalizedInference.segmentationRoiPlotFilePath,
-      segmentation_roi_study_file_name: uploadedSegmentationRoi?.name ?? persistedSegmentationRoiPlotFileName,
-      segmentation_roi_study_file_size_bytes:
-        uploadedSegmentationRoi?.sizeBytes ?? normalizedInference.segmentationRoiPlotFileSizeBytes,
-      segmentation_roi_study_file_mime_type:
-        uploadedSegmentationRoi?.mimeType ?? normalizedInference.segmentationRoiPlotFileMimeType,
-      visualization_data: normalizedInference.visualizationData,
-      cancer_type: normalizedInference.cancerType,
-      classification_confidence: normalizedInference.classificationConfidence,
-      reasoning: normalizedInference.reasoning,
-      proposed_tnm_stage: normalizedInference.proposedTnmStage,
-    })
-    .eq("id", id)
-    .eq("user_id", user.id);
-
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+  // body.status === "completed": finalize (NIfTI upload + DB update) can run
+  // long on a large file, so it's kicked off detached rather than awaited
+  // here. The row stays "Processing" until it lands; the client just keeps
+  // polling and will see "Completed"/"Failed" once it does.
+  if (!finalizingAnalysisIds.has(id)) {
+    finalizingAnalysisIds.add(id);
+    finalizeCompletedAnalysis(supabase, user.id, id, body)
+      .catch((error) => {
+        console.error(`Failed to finalize analysis ${id}:`, error);
+        return supabase
+          .from("analyses")
+          .update({ status: "Failed", findings: "Analysis failed while saving results." })
+          .eq("id", id)
+          .eq("user_id", user.id)
+          .eq("status", "Processing");
+      })
+      .finally(() => {
+        finalizingAnalysisIds.delete(id);
+      });
   }
 
-  return NextResponse.json({ status: normalizedInference.status });
+  return NextResponse.json({ status: "Processing" });
 }
