@@ -3,7 +3,7 @@ import { isAllowedFile, sanitizeFileName } from "@/lib/inference-normalization";
 import { NextResponse } from "next/server";
 
 const MAX_UPLOAD_SIZE_BYTES = 500 * 1024 * 1024;
-const MAX_INFERENCE_ACCEPT_DURATION_MS = 60_000;
+const MAX_INFERENCE_ACCEPT_DURATION_MS = 180_000;
 
 export async function POST(request: Request) {
   try {
@@ -72,13 +72,28 @@ export async function POST(request: Request) {
       inferenceHeaders["Authorization"] = `Bearer ${process.env.INFERENCE_API_KEY.trim()}`;
     }
 
-    const inferenceResponse = await fetch(inferenceApiUrl, {
-      method: "POST",
-      headers: inferenceHeaders,
-      body: inferencePayload,
-      signal: AbortSignal.timeout(MAX_INFERENCE_ACCEPT_DURATION_MS),
-      cache: "no-store",
-    });
+    let inferenceResponse: Response;
+    try {
+      inferenceResponse = await fetch(inferenceApiUrl, {
+        method: "POST",
+        headers: inferenceHeaders,
+        body: inferencePayload,
+        signal: AbortSignal.timeout(MAX_INFERENCE_ACCEPT_DURATION_MS),
+        cache: "no-store",
+      });
+    } catch {
+      // Network-level failure transferring the file to pneumorpheus-server
+      // (connection reset, timed out, etc.) rather than an HTTP error
+      // response — most commonly the shared B1 instance being too busy with
+      // a prior background job to accept a large upload in time.
+      return NextResponse.json(
+        {
+          error:
+            "Could not reach the inference service while uploading the study — it may be busy processing another study. Please try again shortly.",
+        },
+        { status: 503 },
+      );
+    }
 
     const inferenceResult = (await inferenceResponse.json().catch(() => null)) as
       | { error?: string }
